@@ -114,16 +114,18 @@ struct AvailabilityEditorSheet: View {
                 Toggle("Recurring", isOn: $recurringEnabled)
 
                 if recurringEnabled {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .center, spacing: 12) {
                         Text("Days of Week")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
 
-                        // Horizontal weekday chips, wrap if needed
+                        // Single-line, centered weekday chips
                         FlexibleWeekdayChips(
                             selected: $selectedWeekdays,
-                            weekdaySymbols: Calendar.current.shortWeekdaySymbols // Sun, Mon, ...
+                            weekdaySymbols: Calendar.current.shortWeekdaySymbols
                         )
+                        .frame(maxWidth: .infinity, alignment: .center)
 
                         // Common daily window
                         HourPickerRow(title: "Daily Start", hour: $recurringStartHour)
@@ -171,6 +173,7 @@ struct AvailabilityEditorSheet: View {
                         }
                         .disabled(recurringDisabled)
                     }
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
 
@@ -227,16 +230,14 @@ struct AvailabilityEditorSheet: View {
     }
 }
 
-// A flexible row of weekday chips (abbreviated) supporting multi-select.
+// A single-line, centered row of weekday chips (abbreviated) supporting multi-select.
 // Uses Calendar.shortWeekdaySymbols (Sunday-first).
 private struct FlexibleWeekdayChips: View {
     @Binding var selected: Set<Int> // 0...6 => Sunday...Saturday
     let weekdaySymbols: [String]
 
     var body: some View {
-        // Wrap in a grid-like flow using LazyVGrid with adaptive columns
-        let columns = [GridItem(.adaptive(minimum: 44), spacing: 8)]
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+        HStack(spacing: 6) {
             ForEach(0..<7, id: \.self) { index in
                 let isOn = selected.contains(index)
                 Button {
@@ -247,10 +248,10 @@ private struct FlexibleWeekdayChips: View {
                     }
                 } label: {
                     Text(shortSymbol(index))
-                        .font(.subheadline.weight(.semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(isOn ? .white : .primary)
-                        .padding(.vertical, 8)
-                        .frame(minWidth: 44)
+                        .frame(height: 32)
+                        .frame(maxWidth: .infinity)
                         .background(
                             Capsule().fill(isOn ? Color.accentColor : Color.secondary.opacity(0.15))
                         )
@@ -260,6 +261,7 @@ private struct FlexibleWeekdayChips: View {
                 .accessibilityAddTraits(isOn ? .isSelected : [])
             }
         }
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private func shortSymbol(_ index: Int) -> String {
