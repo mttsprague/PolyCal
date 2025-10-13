@@ -4,4 +4,31 @@
    <FileRef
       location = "self:">
    </FileRef>
+   <FileRef
+      location = "group:AuthSession.swift">
+   </FileRef>
+   <FileRef
+      location = "group:Profile.swift">
+   </FileRef>
+   <FileRef
+      location = "group:ProfileView.swift">
+   </FileRef>
+   <FileRef
+      location = "group:ClientsAndMoreViews.swift">
+   </FileRef>
+   <FileRef
+      location = "group:AccountView.swift">
+   </FileRef>
+   <FileRef
+      location = "group:AccountViewModel.swift">
+   </FileRef>
+   <FileRef
+      location = "group:Trainer.swift">
+   </FileRef>
+   <FileRef
+      location = "group:TrainersRepository.swift">
+   </FileRef>
+   <FileRef
+      location = "group:ScheduleOptionsView.swift">
+   </FileRef>
 </Workspace>

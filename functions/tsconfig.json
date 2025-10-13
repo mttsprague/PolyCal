@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "outDir": "lib",
+    "sourceMap": true,
+    "strict": true,
+    "target": "es2017",
+    "esModuleInterop": true, // Often good to have
+    "resolveJsonModule": true, // Often good to have
+    "allowJs": true, // Often good to have if mixing JS and TS
+    "noUncheckedIndexedAccess": true // <--- Add this line
+  },
+  "compileOnSave": true,
+  "include": [
+    "src"
+  ]
+}

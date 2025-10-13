@@ -8,8 +8,16 @@
 import SwiftUI
 import SwiftData
 
+#if canImport(FirebaseCore)
+import FirebaseCore
+#endif
+
 @main
 struct PolyCalApp: App {
+    init() {
+        configureFirebaseIfAvailable()
+    }
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,
@@ -29,4 +37,12 @@ struct PolyCalApp: App {
         }
         .modelContainer(sharedModelContainer)
     }
+}
+
+private func configureFirebaseIfAvailable() {
+    #if canImport(FirebaseCore)
+    if FirebaseApp.app() == nil {
+        FirebaseApp.configure()
+    }
+    #endif
 }

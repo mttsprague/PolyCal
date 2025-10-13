@@ -1,0 +1,196 @@
+//
+//  ScheduleViewModel.swift
+//  PolyCal
+//
+//  Created by Matthew Sprague on 10/12/25.
+//
+
+import SwiftUI
+import Foundation
+import Combine
+
+enum ScheduleMode: Equatable {
+    case myWeek
+    case myDay
+    case allTrainersDay
+    case trainerDay(String) // trainerId
+}
+
+@MainActor
+final class ScheduleViewModel: ObservableObject {
+    // Replace hard-coded trainer with Auth later
+    private(set) var myTrainerId: String = "trainer_demo"
+
+    @Published var mode: ScheduleMode = .myWeek
+    @Published var selectedTrainerId: String?
+
+    // State used by ScheduleView
+    @Published var weekDays: [Date] = []
+    @Published var selectedDate: Date = Date()
+    @Published var visibleHours: [Int] = Array(6...20) // 6am - 8pm
+    @Published var slotsByDay: [DateOnly: [TrainerScheduleSlot]] = [:]
+
+    private let scheduleRepo = ScheduleRepository()
+
+    init() {
+        buildCurrentWeek(anchor: Date())
+    }
+
+    // Title for the current week range, e.g. "Oct 13–19, 2025" or "Sep 30 – Oct 6, 2025"
+    var weekTitle: String {
+        guard let first = weekDays.first, let last = weekDays.last else {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            return formatter.string(from: selectedDate)
+        }
+
+        let cal = Calendar.current
+        let sameMonth = cal.component(.month, from: first) == cal.component(.month, from: last)
+        let sameYear = cal.component(.year, from: first) == cal.component(.year, from: last)
+
+        let startFormatter = DateFormatter()
+        let endFormatter = DateFormatter()
+
+        if sameYear {
+            if sameMonth {
+                // "Oct 13–19, 2025"
+                startFormatter.setLocalizedDateFormatFromTemplate("MMM d")
+                endFormatter.setLocalizedDateFormatFromTemplate("d, yyyy")
+            } else {
+                // "Sep 30 – Oct 6, 2025"
+                startFormatter.setLocalizedDateFormatFromTemplate("MMM d")
+                endFormatter.setLocalizedDateFormatFromTemplate("MMM d, yyyy")
+            }
+        } else {
+            // "Dec 30, 2025 – Jan 5, 2026"
+            startFormatter.setLocalizedDateFormatFromTemplate("MMM d, yyyy")
+            endFormatter.setLocalizedDateFormatFromTemplate("MMM d, yyyy")
+        }
+
+        let startText = startFormatter.string(from: first)
+        let endText = endFormatter.string(from: last)
+        return "\(startText) – \(endText)"
+    }
+
+    func setMode(_ newMode: ScheduleMode) {
+        mode = newMode
+        switch newMode {
+        case .myWeek:
+            break
+        case .myDay:
+            break
+        case .allTrainersDay:
+            break
+        case .trainerDay(let trainerId):
+            selectedTrainerId = trainerId
+        }
+        Task { await loadWeek() }
+    }
+
+    func loadWeek() async {
+        let trainerId: String
+        switch mode {
+        case .trainerDay(let id):
+            trainerId = id
+        default:
+            trainerId = myTrainerId
+        }
+
+        // Determine week range based on selectedDate
+        let cal = Calendar.current
+        let startOfWeek = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: selectedDate)) ?? selectedDate
+        let endOfWeek = cal.date(byAdding: .day, value: 7, to: startOfWeek) ?? selectedDate
+
+        do {
+            let slots = try await scheduleRepo.fetchScheduleSlots(trainerId: trainerId, from: startOfWeek, to: endOfWeek)
+            var grouped: [DateOnly: [TrainerScheduleSlot]] = [:]
+            for slot in slots {
+                let key = DateOnly(slot.startTime)
+                grouped[key, default: []].append(slot)
+            }
+            for key in grouped.keys {
+                grouped[key]?.sort { $0.startTime < $1.startTime }
+            }
+            self.slotsByDay = grouped
+        } catch {
+            self.slotsByDay = [:]
+        }
+    }
+
+    // MARK: - Editing availability (single slot at hour granularity)
+    func setSlotStatus(on day: Date, hour: Int, status: TrainerScheduleSlot.Status) async {
+        let cal = Calendar.current
+        guard let start = cal.date(bySettingHour: hour, minute: 0, second: 0, of: day),
+              let end = cal.date(byAdding: .hour, value: 1, to: start) else { return }
+        await setCustomSlot(on: day, startTime: start, endTime: end, status: status)
+    }
+
+    // Allows custom start/end (from the wheel editor)
+    func setCustomSlot(on day: Date, startTime: Date, endTime: Date, status: TrainerScheduleSlot.Status) async {
+        // Ensure endTime > startTime
+        guard endTime > startTime else { return }
+
+        let trainerId = myTrainerId
+        do {
+            try await scheduleRepo.upsertSlot(trainerId: trainerId, startTime: startTime, endTime: endTime, status: status)
+            await loadWeek()
+        } catch {
+            print("Failed to upsert slot: \(error)")
+        }
+    }
+
+    func clearSlot(on day: Date, hour: Int) async {
+        let cal = Calendar.current
+        guard let start = cal.date(bySettingHour: hour, minute: 0, second: 0, of: day) else { return }
+
+        let trainerId = myTrainerId
+        do {
+            try await scheduleRepo.deleteSlot(trainerId: trainerId, startTime: start)
+            await loadWeek()
+        } catch {
+            print("Failed to delete slot: \(error)")
+        }
+    }
+
+    // MARK: - Bulk availability via Cloud Function
+    func openAvailability(
+        start: Date?,
+        end: Date?,
+        dailyStartHour: Int? = nil,
+        dailyEndHour: Int? = nil,
+        slotDurationMinutes: Int? = nil
+    ) async {
+        let fmt = DateFormatter()
+        fmt.calendar = Calendar(identifier: .gregorian)
+        fmt.timeZone = TimeZone(secondsFromGMT: 0)
+        fmt.dateFormat = "yyyy-MM-dd"
+
+        let startStr = start.map { fmt.string(from: $0) }
+        let endStr = end.map { fmt.string(from: $0) }
+
+        do {
+            let result = try await FunctionsService.shared.processTrainerAvailability(
+                startDate: startStr,
+                endDate: endStr,
+                dailyStartHour: dailyStartHour,
+                dailyEndHour: dailyEndHour,
+                slotDurationMinutes: slotDurationMinutes
+            )
+            print("processTrainerAvailability: \(result.message) slotsAdded=\(result.slotsAdded ?? 0)")
+            await loadWeek()
+        } catch {
+            print("Failed to process availability: \(error)")
+        }
+    }
+
+    // Helper to generate the week array for the header and grid
+    private func buildCurrentWeek(anchor: Date) {
+        let cal = Calendar.current
+        let startOfWeek = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: anchor)) ?? anchor
+        weekDays = (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: startOfWeek) }
+        if !weekDays.contains(where: { cal.isDate($0, inSameDayAs: selectedDate) }) {
+            selectedDate = weekDays.first ?? anchor
+        }
+    }
+}
+
