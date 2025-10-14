@@ -19,54 +19,170 @@ struct ScheduleView: View {
     // Options menu
     @State private var showOptions = false
 
+    // Navigation to other schedule modes
+    @State private var navigateToMyDay = false
+    @State private var navigateToAllTrainersDay = false
+
+    // Layout constants
+    private let rowHeight: CGFloat = 32               // skinny rows
+    private let rowVerticalPadding: CGFloat = 6       // tighter spacing between rows
+    private let timeColWidth: CGFloat = 56            // fixed left column width
+    private let dayColumnWidth: CGFloat = 160         // width per day column (scrollable horizontally)
+    private let columnSpacing: CGFloat = 0            // spacing between day columns
+    private let gridHeaderVPad: CGFloat = 6           // compact vertical padding for day header
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Header avatar + name (tappable)
                 header
 
-                // Reusable week strip
+                // Week strip with chevrons and evenly spaced day bubbles
                 WeekStrip(
                     title: viewModel.weekTitle,
                     weekDays: viewModel.weekDays,
-                    selectedDate: $viewModel.selectedDate
+                    selectedDate: $viewModel.selectedDate,
+                    onPrevWeek: { shiftWeek(by: -1) },
+                    onNextWeek: { shiftWeek(by: 1) }
                 )
-                .padding(.top, 8)
-                .padding(.bottom, 12)
+                .padding(.top, 2)
+                .padding(.bottom, 4) // tighter
 
-                Divider().opacity(0)
+                // MARK: Grid (fixed time column + horizontally scrolling days, single vertical scroll)
+                let headerRowHeight = 28.0 // height of the day header stack (approx)
 
-                // Time grid on a continuous light gray background
-                TimeGrid(
-                    weekDays: viewModel.weekDays,
-                    visibleHours: viewModel.visibleHours,
-                    slotsByDay: viewModel.slotsByDay,
-                    onTapCell: { day, hour in
-                        editorDay = day
-                        editorHour = hour
-                        editorShown = true
-                    },
-                    onSetStatus: { day, hour, status in
-                        Task { await viewModel.setSlotStatus(on: day, hour: hour, status: status) }
-                    },
-                    onClear: { day, hour in
-                        Task { await viewModel.clearSlot(on: day, hour: hour) }
+                ZStack(alignment: .topLeading) {
+                    ScrollView(.vertical, showsIndicators: true) {
+                        HStack(spacing: 0) {
+                            // Fixed left time column (does not scroll horizontally)
+                            VStack(spacing: 0) {
+                                // Spacer to align under the day header height
+                                Color.clear
+                                    .frame(height: headerRowHeight + gridHeaderVPad * 2)
+
+                                ForEach(viewModel.visibleHours, id: \.self) { hour in
+                                    Text(hourLabel(hour))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .trailing)
+                                        .padding(.trailing, 6)
+                                        .frame(height: rowHeight)
+                                        .background(Color(UIColor.systemGray6))
+                                        .padding(.vertical, rowVerticalPadding)
+                                }
+                            }
+                            .frame(width: timeColWidth)
+                            .background(Color(UIColor.systemGray6))
+
+                            // Right side: days header + grid share the same horizontal scroll view
+                            ScrollView(.horizontal, showsIndicators: true) {
+                                VStack(spacing: 0) {
+                                    // Day header row (scrolls horizontally with grid)
+                                    HStack(spacing: columnSpacing) {
+                                        ForEach(viewModel.weekDays, id: \.self) { day in
+                                            VStack(spacing: 2) {
+                                                Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
+                                                    .font(.caption2.weight(.semibold))
+                                                    .foregroundStyle(.secondary)
+                                                Text(day, format: .dateTime.month(.abbreviated).day())
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            .frame(width: dayColumnWidth)
+                                        }
+                                    }
+                                    .padding(.vertical, gridHeaderVPad)
+                                    .padding(.leading, 6)
+                                    .padding(.trailing, 8)
+
+                                    // Grid rows (scroll horizontally with the header)
+                                    VStack(spacing: 0) {
+                                        ForEach(viewModel.visibleHours, id: \.self) { hour in
+                                            HStack(spacing: columnSpacing) {
+                                                ForEach(viewModel.weekDays, id: \.self) { day in
+                                                    ZStack(alignment: .topLeading) {
+                                                        RoundedRectangle(cornerRadius: 12)
+                                                            .fill(Color(UIColor.systemGray5))
+                                                        RoundedRectangle(cornerRadius: 12)
+                                                            .stroke(Color(UIColor.systemGray3), lineWidth: 0.5)
+
+                                                        let key = DateOnly(day)
+                                                        if let slots = viewModel.slotsByDay[key] {
+                                                            ForEach(slots) { slot in
+                                                                if Calendar.current.isDate(
+                                                                    slot.startTime,
+                                                                    equalTo: dateBySetting(hour: hour, on: day),
+                                                                    toGranularity: .hour
+                                                                ) {
+                                                                    EventCell(slot: slot)
+                                                                        .padding(8)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    .frame(width: dayColumnWidth, height: rowHeight)
+                                                    .padding(.horizontal, 6)
+                                                    .contentShape(Rectangle())
+                                                    .onTapGesture {
+                                                        editorDay = day
+                                                        editorHour = hour
+                                                        editorShown = true
+                                                    }
+                                                    .contextMenu {
+                                                        Button {
+                                                            Task { await viewModel.setSlotStatus(on: day, hour: hour, status: .open) }
+                                                        } label: {
+                                                            Label("Set Available", systemImage: "checkmark.circle")
+                                                        }
+                                                        Button(role: .destructive) {
+                                                            Task { await viewModel.setSlotStatus(on: day, hour: hour, status: .unavailable) }
+                                                        } label: {
+                                                            Label("Set Unavailable", systemImage: "xmark.circle")
+                                                        }
+                                                        Divider()
+                                                        Button(role: .destructive) {
+                                                            Task { await viewModel.clearSlot(on: day, hour: hour) }
+                                                        } label: {
+                                                            Label("Clear", systemImage: "trash")
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            .padding(.vertical, rowVerticalPadding)
+                                        }
+                                    }
+                                    .padding(.bottom, 8)
+                                }
+                            }
+                        }
+                        .background(Color(UIColor.systemGray6))
                     }
-                )
-                .background(Color.secondary.opacity(0.06)) // continuous canvas
+
+                    // Current time bar – position by vertical offset; spans the right side content
+                    TimelineView(.everyMinute) { context in
+                        if let y = currentTimeYOffset(for: context.date,
+                                                      firstHour: viewModel.visibleHours.first,
+                                                      rowHeight: rowHeight,
+                                                      rowVerticalPadding: rowVerticalPadding) {
+                            Rectangle()
+                                .fill(Color.red)
+                                .frame(height: 2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .offset(x: 0, y: (headerRowHeight + gridHeaderVPad * 2) + y)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                }
             }
             .navigationBarHidden(true)
             .task {
-                // Initial trainer id wiring on first appearance
                 viewModel.setTrainerId(auth.userId ?? "trainer_demo")
                 await viewModel.loadWeek()
             }
             .onChange(of: auth.userId) { _, newValue in
-                // Update trainer id when auth user changes
                 viewModel.setTrainerId(newValue ?? "trainer_demo")
             }
             .onChange(of: auth.isTrainer) { _, _ in
-                // Refresh profile and reload when trainer status changes (e.g., after registration)
                 Task {
                     await auth.refreshTrainerProfileIfNeeded()
                     await viewModel.loadWeek()
@@ -102,13 +218,40 @@ struct ScheduleView: View {
             }
             .sheet(isPresented: $showOptions) {
                 ScheduleOptionsView(
-                    onMyWeek: { viewModel.setMode(.myWeek) },
-                    onMyDay: { viewModel.setMode(.myDay) },
-                    onAllTrainersDay: { viewModel.setMode(.allTrainersDay) },
-                    onSelectTrainer: { id in viewModel.setMode(.trainerDay(id)) }
+                    onMyWeek: {
+                        viewModel.setMode(.myWeek)
+                    },
+                    onMyDay: {
+                        viewModel.setMode(.myDay)
+                        navigateToMyDay = true
+                    },
+                    onAllTrainersDay: {
+                        viewModel.setMode(.allTrainersDay)
+                        navigateToAllTrainersDay = true
+                    },
+                    onSelectTrainer: { id in
+                        viewModel.setMode(.trainerDay(id))
+                    }
                 )
                 .environmentObject(auth)
                 .presentationDetents([.medium, .large])
+            }
+            .navigationDestination(isPresented: $navigateToMyDay) {
+                DayScheduleView(viewModel: viewModel)
+                    .environmentObject(auth)
+            }
+            .navigationDestination(isPresented: $navigateToAllTrainersDay) {
+                AllTrainersDayView(scheduleViewModel: viewModel)
+                    .environmentObject(auth)
+            }
+        }
+    }
+
+    private func shiftWeek(by delta: Int) {
+        let cal = Calendar.current
+        if let newDate = cal.date(byAdding: .day, value: 7 * delta, to: viewModel.selectedDate) {
+            withAnimation(.easeInOut) {
+                viewModel.selectedDate = newDate
             }
         }
     }
@@ -135,10 +278,6 @@ struct ScheduleView: View {
                 }
 
                 Spacer()
-
-                Image(systemName: "chevron.down")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.secondary)
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
@@ -179,102 +318,8 @@ struct ScheduleView: View {
                 )
         }
     }
-}
 
-private struct TimeGrid: View {
-    let weekDays: [Date]
-    let visibleHours: [Int]
-    let slotsByDay: [DateOnly: [TrainerScheduleSlot]]
-    let onTapCell: (Date, Int) -> Void
-    let onSetStatus: (Date, Int, TrainerScheduleSlot.Status) -> Void
-    let onClear: (Date, Int) -> Void
-
-    var body: some View {
-        GeometryReader { _ in
-            ScrollView(.vertical, showsIndicators: true) {
-                VStack(spacing: 0) {
-                    HStack(spacing: 0) {
-                        Text("")
-                            .frame(width: 54)
-                        ForEach(weekDays, id: \.self) { day in
-                            VStack(spacing: 2) {
-                                Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                Text(day, format: .dateTime.month(.abbreviated).day())
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
-
-                    VStack(spacing: 0) {
-                        ForEach(visibleHours, id: \.self) { hour in
-                            HStack(spacing: 0) {
-                                Text(hourLabel(hour))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 54, alignment: .trailing)
-                                    .padding(.trailing, 6)
-
-                                ForEach(weekDays, id: \.self) { day in
-                                    ZStack(alignment: .topLeading) {
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .fill(Color.secondary.opacity(0.08))
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(Color.secondary.opacity(0.12))
-
-                                        let key = DateOnly(day)
-                                        if let slots = slotsByDay[key] {
-                                            ForEach(slots) { slot in
-                                                if Calendar.current.isDate(
-                                                    slot.startTime,
-                                                    equalTo: dateBySetting(hour: hour, on: day),
-                                                    toGranularity: .hour
-                                                ) {
-                                                    EventCell(slot: slot)
-                                                        .padding(6)
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .frame(height: 64)
-                                    .padding(.horizontal, 6)
-                                    .onTapGesture {
-                                        onTapCell(day, hour)
-                                    }
-                                    .contextMenu {
-                                        Button {
-                                            onSetStatus(day, hour, .open)
-                                        } label: {
-                                            Label("Set Available", systemImage: "checkmark.circle")
-                                        }
-                                        Button(role: .destructive) {
-                                            onSetStatus(day, hour, .unavailable)
-                                        } label: {
-                                            Label("Set Unavailable", systemImage: "xmark.circle")
-                                        }
-                                        Divider()
-                                        Button(role: .destructive) {
-                                            onClear(day, hour)
-                                        } label: {
-                                            Label("Clear", systemImage: "trash")
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.vertical, 4)
-                        }
-                    }
-                    .padding(.bottom, 12)
-                }
-                .padding(.top, 4)
-            }
-        }
-    }
+    // MARK: - Helpers
 
     private func hourLabel(_ hour: Int) -> String {
         let comps = DateComponents(calendar: Calendar.current, hour: hour)
@@ -284,6 +329,19 @@ private struct TimeGrid: View {
 
     private func dateBySetting(hour: Int, on day: Date) -> Date {
         Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: day) ?? day
+    }
+
+    private func currentTimeYOffset(for date: Date, firstHour: Int?, rowHeight: CGFloat, rowVerticalPadding: CGFloat) -> CGFloat? {
+        guard let firstHour, let lastHour = viewModel.visibleHours.last else { return nil }
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: date)
+        guard let hour = comps.hour, let minute = comps.minute else { return nil }
+        if hour < firstHour || hour > lastHour + 1 { return nil }
+
+        let perHourHeight = rowHeight + (rowVerticalPadding * 2)
+        let initialTopPadding: CGFloat = rowVerticalPadding
+        let wholeHours = CGFloat(max(0, hour - firstHour))
+        let fraction = CGFloat(min(max(minute, 0), 59)) / 60.0
+        return initialTopPadding + (wholeHours + fraction) * perHourHeight
     }
 }
 

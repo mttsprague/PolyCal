@@ -36,42 +36,53 @@ final class FirestoreService {
         #endif
     }
 
-    // MARK: - Schedule (stubbed fetch to satisfy repository; implement Firestore query later)
+    // MARK: - Schedule (fetch)
     func fetchTrainerSchedule(trainerId: String, from: Date, to: Date) async throws -> [TrainerScheduleSlot] {
         #if canImport(FirebaseFirestore)
-        // Example Firestore implementation (uncomment and refine when ready):
-        // let db = Firestore.firestore()
-        // let startTs = Timestamp(date: from)
-        // let endTs = Timestamp(date: to)
-        // let snapshot = try await db.collection("trainers")
-        //     .document(trainerId)
-        //     .collection("schedules")
-        //     .whereField("startTime", isGreaterThanOrEqualTo: startTs)
-        //     .whereField("startTime", isLessThan: endTs)
-        //     .getDocuments()
-        // return snapshot.documents.compactMap { doc in
-        //     let data = doc.data()
-        //     guard
-        //         let statusRaw = data["status"] as? String,
-        //         let status = TrainerScheduleSlot.Status(rawValue: statusRaw),
-        //         let startTs = data["startTime"] as? Timestamp,
-        //         let endTs = data["endTime"] as? Timestamp
-        //     else { return nil }
-        //     return TrainerScheduleSlot(
-        //         id: doc.documentID,
-        //         trainerId: trainerId,
-        //         status: status,
-        //         startTime: startTs.dateValue(),
-        //         endTime: endTs.dateValue(),
-        //         clientId: data["clientId"] as? String,
-        //         clientName: data["clientName"] as? String,
-        //         bookedAt: (data["bookedAt"] as? Timestamp)?.dateValue(),
-        //         updatedAt: (data["updatedAt"] as? Timestamp)?.dateValue()
-        //     )
-        // }
+        let db = Firestore.firestore()
+        let startTs = Timestamp(date: from)
+        let endTs = Timestamp(date: to)
 
-        // For now, return an empty array so UI still works
-        return []
+        let snapshot = try await db.collection("trainers")
+            .document(trainerId)
+            .collection("schedules")
+            .whereField("startTime", isGreaterThanOrEqualTo: startTs)
+            .whereField("startTime", isLessThan: endTs)
+            .order(by: "startTime")
+            .getDocuments()
+
+        let slots: [TrainerScheduleSlot] = snapshot.documents.compactMap { doc in
+            let data = doc.data()
+
+            // Required fields
+            guard
+                let statusRaw = data["status"] as? String,
+                let status = TrainerScheduleSlot.Status(rawValue: statusRaw),
+                let startTs = data["startTime"] as? Timestamp,
+                let endTs = data["endTime"] as? Timestamp
+            else {
+                return nil
+            }
+
+            // Optional fields
+            let clientId = data["clientId"] as? String
+            let clientName = data["clientName"] as? String
+            let bookedAt = (data["bookedAt"] as? Timestamp)?.dateValue()
+            let updatedAt = (data["updatedAt"] as? Timestamp)?.dateValue()
+
+            return TrainerScheduleSlot(
+                id: doc.documentID,
+                trainerId: trainerId,
+                status: status,
+                startTime: startTs.dateValue(),
+                endTime: endTs.dateValue(),
+                clientId: clientId,
+                clientName: clientName,
+                bookedAt: bookedAt,
+                updatedAt: updatedAt
+            )
+        }
+        return slots
         #else
         // No Firestore in this build; return empty to keep app usable
         return []
