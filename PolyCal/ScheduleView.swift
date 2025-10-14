@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct ScheduleView: View {
+    @EnvironmentObject private var auth: AuthManager
     @StateObject private var viewModel = ScheduleViewModel()
 
     // Editor presentation state
@@ -15,11 +16,15 @@ struct ScheduleView: View {
     @State private var editorDay: Date = Date()
     @State private var editorHour: Int = 9
 
+    // Options menu
+    @State private var showOptions = false
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Header avatar area
+                // Header avatar + name (tappable)
                 header
+
                 // Reusable week strip
                 WeekStrip(
                     title: viewModel.weekTitle,
@@ -52,9 +57,22 @@ struct ScheduleView: View {
             }
             .navigationBarHidden(true)
             .task {
+                // Initial trainer id wiring on first appearance
+                viewModel.setTrainerId(auth.userId ?? "trainer_demo")
                 await viewModel.loadWeek()
             }
-            .onChange(of: viewModel.selectedDate) { _ in
+            .onChange(of: auth.userId) { _, newValue in
+                // Update trainer id when auth user changes
+                viewModel.setTrainerId(newValue ?? "trainer_demo")
+            }
+            .onChange(of: auth.isTrainer) { _, _ in
+                // Refresh profile and reload when trainer status changes (e.g., after registration)
+                Task {
+                    await auth.refreshTrainerProfileIfNeeded()
+                    await viewModel.loadWeek()
+                }
+            }
+            .onChange(of: viewModel.selectedDate) { _, _ in
                 Task { await viewModel.loadWeek() }
             }
             .sheet(isPresented: $editorShown) {
@@ -63,7 +81,6 @@ struct ScheduleView: View {
                     defaultHour: editorHour,
                     onSaveSingle: { day, start, end, status in
                         Task {
-                            // Ensure start/end are on the provided day
                             await viewModel.setCustomSlot(on: day, startTime: start, endTime: end, status: status)
                             editorShown = false
                         }
@@ -83,53 +100,84 @@ struct ScheduleView: View {
                 )
                 .presentationDetents([.medium, .large])
             }
+            .sheet(isPresented: $showOptions) {
+                ScheduleOptionsView(
+                    onMyWeek: { viewModel.setMode(.myWeek) },
+                    onMyDay: { viewModel.setMode(.myDay) },
+                    onAllTrainersDay: { viewModel.setMode(.allTrainersDay) },
+                    onSelectTrainer: { id in viewModel.setMode(.trainerDay(id)) }
+                )
+                .environmentObject(auth)
+                .presentationDetents([.medium, .large])
+            }
         }
     }
 
     private var header: some View {
-        VStack(spacing: 12) {
-            HStack {
-                // Placeholder avatar
-                Circle()
-                    .fill(Color.gray.opacity(0.2))
+        Button {
+            showOptions = true
+        } label: {
+            HStack(spacing: 12) {
+                avatarView
                     .frame(width: 36, height: 36)
-                    .overlay(
-                        Image(systemName: "person.crop.circle.fill")
-                            .font(.system(size: 28))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(auth.trainerDisplayName ?? "My Schedule")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    if auth.isAuthenticated {
+                        Text("You")
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
-                    )
+                    }
+                }
+
                 Spacer()
+
+                Image(systemName: "chevron.down")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
             .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.clear)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .padding(.top, 8)
     }
-}
 
-struct DayPill: View {
-    let date: Date
-    let isSelected: Bool
-
-    var body: some View {
-        let cal = Calendar.current
-        let wd = date.formatted(.dateTime.weekday(.abbreviated)).uppercased()
-        let d = cal.component(.day, from: date)
-
-        return VStack(spacing: 6) {
-            Text(wd.prefix(3))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            ZStack {
-                Circle()
-                    .fill(isSelected ? Color.blue : Color.gray.opacity(0.15))
-                    .frame(width: 40, height: 40)
-                Text("\(d)")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(isSelected ? .white : .primary)
+    @ViewBuilder
+    private var avatarView: some View {
+        if let urlString = auth.trainerPhotoURLString, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .empty:
+                    Circle().fill(Color.gray.opacity(0.2))
+                        .overlay(ProgressView())
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .clipShape(Circle())
+                case .failure:
+                    Circle().fill(Color.gray.opacity(0.2))
+                        .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 20)).foregroundStyle(.secondary))
+                @unknown default:
+                    Circle().fill(Color.gray.opacity(0.2))
+                }
             }
+        } else {
+            Circle()
+                .fill(Color.gray.opacity(0.2))
+                .overlay(
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary)
+                )
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(wd) \(d)")
     }
 }
 
@@ -145,9 +193,7 @@ private struct TimeGrid: View {
         GeometryReader { _ in
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(spacing: 0) {
-                    // Column headers (Sun, Mon, ...)
                     HStack(spacing: 0) {
-                        // time gutter spacer
                         Text("")
                             .frame(width: 54)
                         ForEach(weekDays, id: \.self) { day in
@@ -165,11 +211,9 @@ private struct TimeGrid: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 8)
 
-                    // Rows per hour
                     VStack(spacing: 0) {
                         ForEach(visibleHours, id: \.self) { hour in
                             HStack(spacing: 0) {
-                                // Time gutter
                                 Text(hourLabel(hour))
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
@@ -178,13 +222,11 @@ private struct TimeGrid: View {
 
                                 ForEach(weekDays, id: \.self) { day in
                                     ZStack(alignment: .topLeading) {
-                                        // cell background
                                         RoundedRectangle(cornerRadius: 10)
                                             .fill(Color.secondary.opacity(0.08))
                                         RoundedRectangle(cornerRadius: 10)
                                             .stroke(Color.secondary.opacity(0.12))
 
-                                        // Events that fall within this hour
                                         let key = DateOnly(day)
                                         if let slots = slotsByDay[key] {
                                             ForEach(slots) { slot in

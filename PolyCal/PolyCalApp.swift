@@ -14,6 +14,8 @@ import FirebaseCore
 
 @main
 struct PolyCalApp: App {
+    @StateObject private var auth = AuthManager()
+
     init() {
         configureFirebaseIfAvailable()
     }
@@ -34,6 +36,7 @@ struct PolyCalApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(auth)
         }
         .modelContainer(sharedModelContainer)
     }

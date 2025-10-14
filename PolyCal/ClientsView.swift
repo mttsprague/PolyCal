@@ -16,12 +16,33 @@ struct ClientsView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     header
                     title
+
+                    if let error = viewModel.errorMessage, !error.isEmpty {
+                        Text(error)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .padding(.vertical, 4)
+                    }
+
                     Divider()
 
                     LazyVStack(spacing: 0) {
                         ForEach(viewModel.clients) { client in
-                            ClientRow(client: client)
+                            NavigationLink {
+                                ClientDetailView(client: client)
+                            } label: {
+                                ClientRow(client: client)
+                            }
+                            .buttonStyle(.plain)
                             Divider().padding(.leading, 72)
+                        }
+
+                        if viewModel.clients.isEmpty, viewModel.errorMessage == nil {
+                            Text("No clients found.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .padding(.vertical, 24)
+                                .frame(maxWidth: .infinity, alignment: .center)
                         }
                     }
                 }
@@ -81,3 +102,4 @@ private struct ClientRow: View {
         .padding(.vertical, 12)
     }
 }
+

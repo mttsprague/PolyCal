@@ -18,8 +18,8 @@ enum ScheduleMode: Equatable {
 
 @MainActor
 final class ScheduleViewModel: ObservableObject {
-    // Replace hard-coded trainer with Auth later
-    private(set) var myTrainerId: String = "trainer_demo"
+    // Default to demo; ScheduleView updates this from AuthManager when available
+    private var myTrainerId: String = "trainer_demo"
 
     @Published var mode: ScheduleMode = .myWeek
     @Published var selectedTrainerId: String?
@@ -34,6 +34,12 @@ final class ScheduleViewModel: ObservableObject {
 
     init() {
         buildCurrentWeek(anchor: Date())
+    }
+
+    // Allow the view to update the trainer id from Auth
+    func setTrainerId(_ id: String) {
+        myTrainerId = id
+        Task { await loadWeek() }
     }
 
     // Title for the current week range, e.g. "Oct 13–19, 2025" or "Sep 30 – Oct 6, 2025"
@@ -53,16 +59,13 @@ final class ScheduleViewModel: ObservableObject {
 
         if sameYear {
             if sameMonth {
-                // "Oct 13–19, 2025"
                 startFormatter.setLocalizedDateFormatFromTemplate("MMM d")
                 endFormatter.setLocalizedDateFormatFromTemplate("d, yyyy")
             } else {
-                // "Sep 30 – Oct 6, 2025"
                 startFormatter.setLocalizedDateFormatFromTemplate("MMM d")
                 endFormatter.setLocalizedDateFormatFromTemplate("MMM d, yyyy")
             }
         } else {
-            // "Dec 30, 2025 – Jan 5, 2026"
             startFormatter.setLocalizedDateFormatFromTemplate("MMM d, yyyy")
             endFormatter.setLocalizedDateFormatFromTemplate("MMM d, yyyy")
         }
@@ -127,7 +130,6 @@ final class ScheduleViewModel: ObservableObject {
 
     // Allows custom start/end (from the wheel editor)
     func setCustomSlot(on day: Date, startTime: Date, endTime: Date, status: TrainerScheduleSlot.Status) async {
-        // Ensure endTime > startTime
         guard endTime > startTime else { return }
 
         let trainerId = myTrainerId
@@ -183,7 +185,6 @@ final class ScheduleViewModel: ObservableObject {
         }
     }
 
-    // Helper to generate the week array for the header and grid
     private func buildCurrentWeek(anchor: Date) {
         let cal = Calendar.current
         let startOfWeek = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: anchor)) ?? anchor
@@ -193,4 +194,3 @@ final class ScheduleViewModel: ObservableObject {
         }
     }
 }
-

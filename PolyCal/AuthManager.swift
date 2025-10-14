@@ -1,6 +1,7 @@
 // AuthManager.swift
 import Foundation
 import SwiftUI
+import Combine
 
 #if canImport(FirebaseAuth)
 import FirebaseAuth
@@ -22,20 +23,31 @@ final class AuthManager: ObservableObject {
     @Published var errorMessage: String?
     @Published var isTrainer: Bool = false
 
+    // Trainer profile fields (from /trainers/{uid})
+    @Published var trainerDisplayName: String?
+    @Published var trainerPhotoURLString: String?
+
     // Fields for convenience in the MoreView
     @Published var emailInput: String = ""
     @Published var passwordInput: String = ""
     @Published var firstNameInput: String = ""
     @Published var lastNameInput: String = ""
 
+    #if canImport(FirebaseAuth)
+    private var authListenerHandle: AuthStateDidChangeListenerHandle?
+    #endif
+
     init() {
         #if canImport(FirebaseAuth)
-        Auth.auth().addStateDidChangeListener { [weak self] _, user in
+        authListenerHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             guard let self else { return }
             self.isAuthenticated = (user != nil)
             self.userId = user?.uid
             self.userEmail = user?.email
-            Task { await self.refreshTrainerStatus() }
+            Task {
+                await self.refreshTrainerStatus()
+                await self.refreshTrainerProfileIfNeeded()
+            }
         }
         #else
         // No FirebaseAuth in this build
@@ -43,6 +55,14 @@ final class AuthManager: ObservableObject {
         self.userId = nil
         self.userEmail = nil
         self.isTrainer = false
+        #endif
+    }
+
+    deinit {
+        #if canImport(FirebaseAuth)
+        if let handle = authListenerHandle {
+            Auth.auth().removeStateDidChangeListener(handle)
+        }
         #endif
     }
 
@@ -67,6 +87,7 @@ final class AuthManager: ObservableObject {
             try await registerTrainerProfileOnServer(uid: uid, email: emailInput, firstName: firstNameInput, lastName: lastNameInput)
 
             await refreshTrainerStatus()
+            await refreshTrainerProfileIfNeeded()
         } catch {
             self.errorMessage = error.localizedDescription
         }
@@ -81,6 +102,7 @@ final class AuthManager: ObservableObject {
         do {
             _ = try await Auth.auth().signIn(withEmail: emailInput, password: passwordInput)
             await refreshTrainerStatus()
+            await refreshTrainerProfileIfNeeded()
         } catch {
             self.errorMessage = error.localizedDescription
         }
@@ -97,6 +119,8 @@ final class AuthManager: ObservableObject {
             self.isTrainer = false
             self.userId = nil
             self.userEmail = nil
+            self.trainerDisplayName = nil
+            self.trainerPhotoURLString = nil
         } catch {
             self.errorMessage = error.localizedDescription
         }
@@ -138,7 +162,7 @@ final class AuthManager: ObservableObject {
         #endif
     }
 
-    // MARK: - Status helpers
+    // MARK: - Status/profile helpers
 
     func refreshTrainerStatus() async {
         #if canImport(FirebaseAuth) && canImport(FirebaseFirestore)
@@ -155,6 +179,30 @@ final class AuthManager: ObservableObject {
         }
         #else
         self.isTrainer = false
+        #endif
+    }
+
+    func refreshTrainerProfileIfNeeded() async {
+        #if canImport(FirebaseAuth) && canImport(FirebaseFirestore)
+        guard isTrainer, let uid = Auth.auth().currentUser?.uid else {
+            self.trainerDisplayName = nil
+            self.trainerPhotoURLString = nil
+            return
+        }
+        do {
+            let ref = Firestore.firestore().collection("trainers").document(uid)
+            let snap = try await ref.getDocument()
+            if let data = snap.data() {
+                self.trainerDisplayName = (data["name"] as? String) ?? self.trainerDisplayName
+                if let url = data["photoURL"] as? String, !url.isEmpty {
+                    self.trainerPhotoURLString = url
+                } else if let url = data["avatarUrl"] as? String, !url.isEmpty {
+                    self.trainerPhotoURLString = url
+                }
+            }
+        } catch {
+            // Leave previous values; optionally surface error
+        }
         #endif
     }
 }

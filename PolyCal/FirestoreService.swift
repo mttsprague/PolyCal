@@ -205,10 +205,11 @@ final class FirestoreService {
     func fetchTrainerClients(trainerId: String) async throws -> [Client] {
         #if canImport(FirebaseFirestore)
         let db = Firestore.firestore()
-        var query: Query = db.collection("users")
+        let query: Query = db.collection("users")
 
-        // Optional: filter active users if present
-        query = query.whereField("active", isEqualTo: true)
+        // NOTE: If your user docs may not have `active`, this filter will exclude them.
+        // Remove or re-enable once data is normalized.
+        // query = query.whereField("active", isEqualTo: true)
 
         // If you add a linkage field (e.g., "trainerId"), you can enable this filter:
         // query = query.whereField("trainerId", isEqualTo: trainerId)
@@ -243,4 +244,3 @@ final class FirestoreService {
         #endif
     }
 }
-

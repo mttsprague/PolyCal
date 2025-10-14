@@ -37,3 +37,33 @@ struct WeekStrip: View {
     }
 }
 
+private struct DayPill: View {
+    let date: Date
+    let isSelected: Bool
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(isSelected ? .white : .secondary)
+
+            Text(date, format: .dateTime.day())
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(isSelected ? .white : .primary)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(
+            Capsule()
+                .fill(isSelected ? Color.accentColor : Color.secondary.opacity(0.12))
+        )
+        .overlay(
+            Capsule()
+                .stroke(isSelected ? Color.accentColor : Color.secondary.opacity(0.2))
+        )
+        .contentShape(Capsule())
+        .animation(.easeInOut(duration: 0.2), value: isSelected)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(date.formatted(date: .abbreviated, time: .omitted))
+    }
+}

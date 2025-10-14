@@ -91,20 +91,20 @@ struct AvailabilityEditorSheet: View {
             DatePicker("Day", selection: $singleDay, displayedComponents: .date)
 
             DatePicker("Start", selection: $singleStart, displayedComponents: .hourAndMinute)
-                .onChange(of: singleStart) { _ in
+                .onChange(of: singleStart) { _, newValue in
                     // Keep end > start
-                    if singleEnd <= singleStart {
-                        singleEnd = Calendar.current.date(byAdding: .minute, value: 30, to: singleStart) ?? singleStart
+                    if singleEnd <= newValue {
+                        singleEnd = Calendar.current.date(byAdding: .minute, value: 30, to: newValue) ?? newValue
                     }
                 }
 
             DatePicker("End", selection: $singleEnd, in: singleStart..., displayedComponents: .hourAndMinute)
         }
-        .onChange(of: singleDay) { _ in
+        .onChange(of: singleDay) { _, newDay in
             // Re-anchor start/end to selected day keeping times
             let cal = Calendar.current
-            singleStart = anchor(time: singleStart, toDay: singleDay, calendar: cal)
-            singleEnd = max(anchor(time: singleEnd, toDay: singleDay, calendar: cal), singleStart)
+            singleStart = anchor(time: singleStart, toDay: newDay, calendar: cal)
+            singleEnd = max(anchor(time: singleEnd, toDay: newDay, calendar: cal), singleStart)
         }
     }
 
@@ -130,14 +130,14 @@ struct AvailabilityEditorSheet: View {
                         // Common daily window
                         HourPickerRow(title: "Daily Start", hour: $recurringStartHour)
                         HourPickerRow(title: "Daily End", hour: $recurringEndHour)
-                            .onChange(of: recurringEndHour) { _ in
-                                if recurringEndHour <= recurringStartHour {
+                            .onChange(of: recurringEndHour) { _, newValue in
+                                if newValue <= recurringStartHour {
                                     recurringEndHour = min(recurringStartHour + 1, 23)
                                 }
                             }
-                            .onChange(of: recurringStartHour) { _ in
-                                if recurringEndHour <= recurringStartHour {
-                                    recurringEndHour = min(recurringStartHour + 1, 23)
+                            .onChange(of: recurringStartHour) { _, newValue in
+                                if recurringEndHour <= newValue {
+                                    recurringEndHour = min(newValue + 1, 23)
                                 }
                             }
 
@@ -148,7 +148,7 @@ struct AvailabilityEditorSheet: View {
                         ), displayedComponents: .date)
 
                         Toggle("Ongoing", isOn: $recurringOngoing)
-                            .onChange(of: recurringOngoing) { on in
+                            .onChange(of: recurringOngoing) { _, on in
                                 if on { bulkEndDate = nil }
                             }
 
