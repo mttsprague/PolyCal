@@ -11,6 +11,10 @@ struct DayScheduleView: View {
     @EnvironmentObject private var auth: AuthManager
     @ObservedObject var viewModel: ScheduleViewModel
 
+    // Client detail sheet
+    @State private var selectedClient: Client?
+    @State private var clientSheetShown = false
+
     // Layout constants for list presentation
     private let rowCornerRadius: CGFloat = 12
 
@@ -44,6 +48,12 @@ struct DayScheduleView: View {
                             ForEach(slots) { slot in
                                 DayEventRow(slot: slot)
                                     .padding(.horizontal)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        Task {
+                                            await handleTap(slot)
+                                        }
+                                    }
                             }
                             .padding(.vertical, 8)
                         }
@@ -65,6 +75,31 @@ struct DayScheduleView: View {
             .onChange(of: viewModel.selectedDate) { _, _ in
                 Task { await viewModel.loadWeek() }
             }
+            .sheet(isPresented: $clientSheetShown, onDismiss: {
+                selectedClient = nil
+            }, content: {
+                if let client = selectedClient {
+                    ClientDetailSheet(client: client)
+                        .presentationDetents([.medium, .large])
+                } else {
+                    // Should rarely show now; we present after data arrives.
+                    ProgressView("Loading…")
+                        .padding()
+                }
+            })
+        }
+    }
+
+    private func handleTap(_ slot: TrainerScheduleSlot) async {
+        guard slot.isBooked, let clientId = slot.clientId else { return }
+        let fetched = try? await FirestoreService.shared.fetchClient(by: clientId)
+        await MainActor.run {
+            if let client = fetched {
+                self.selectedClient = client
+            } else {
+                self.selectedClient = Client(id: clientId, firstName: slot.clientName ?? "Booked", lastName: "", emailAddress: "", phoneNumber: "", photoURL: nil)
+            }
+            self.clientSheetShown = true
         }
     }
 
@@ -204,7 +239,64 @@ private struct DayEventRow: View {
         switch slot.status {
         case .open: return "Open"
         case .unavailable: return "Unavailable"
+        case .booked: return "Booked"
         }
+    }
+}
+
+private struct ClientDetailSheet: View {
+    let client: Client
+
+    var body: some View {
+        VStack(spacing: 16) {
+            if let urlString = client.photoURL, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .empty:
+                        Circle().fill(Color.gray.opacity(0.2))
+                            .frame(width: 72, height: 72)
+                            .overlay(ProgressView())
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 72, height: 72)
+                            .clipShape(Circle())
+                    case .failure:
+                        Circle().fill(Color.gray.opacity(0.2))
+                            .frame(width: 72, height: 72)
+                            .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
+                    @unknown default:
+                        Circle().fill(Color.gray.opacity(0.2))
+                            .frame(width: 72, height: 72)
+                    }
+                }
+            } else {
+                Circle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 72, height: 72)
+                    .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
+            }
+
+            VStack(spacing: 4) {
+                Text(client.fullName)
+                    .font(.title3.weight(.semibold))
+                if !client.emailAddress.isEmpty {
+                    Text(client.emailAddress)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if !client.phoneNumber.isEmpty {
+                    Text(client.phoneNumber)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+        }
+        .padding()
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -212,3 +304,4 @@ private struct DayEventRow: View {
     DayScheduleView(viewModel: ScheduleViewModel())
         .environmentObject(AuthManager())
 }
+

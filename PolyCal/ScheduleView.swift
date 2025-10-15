@@ -23,6 +23,10 @@ struct ScheduleView: View {
     @State private var navigateToMyDay = false
     @State private var navigateToAllTrainersDay = false
 
+    // Client detail sheet
+    @State private var selectedClient: Client?
+    @State private var clientSheetShown = false
+
     // Layout constants
     private let rowHeight: CGFloat = 32               // skinny rows
     private let rowVerticalPadding: CGFloat = 6       // tighter spacing between rows
@@ -107,23 +111,43 @@ struct ScheduleView: View {
                                                             .stroke(Color(UIColor.systemGray3), lineWidth: 0.5)
 
                                                         let key = DateOnly(day)
-                                                        if let slots = viewModel.slotsByDay[key] {
-                                                            ForEach(slots) { slot in
-                                                                if Calendar.current.isDate(
-                                                                    slot.startTime,
-                                                                    equalTo: dateBySetting(hour: hour, on: day),
-                                                                    toGranularity: .hour
-                                                                ) {
-                                                                    EventCell(slot: slot)
-                                                                        .padding(8)
+                                                        let matchingSlots: [TrainerScheduleSlot] = {
+                                                            if let slots = viewModel.slotsByDay[key] {
+                                                                return slots.filter {
+                                                                    Calendar.current.isDate(
+                                                                        $0.startTime,
+                                                                        equalTo: dateBySetting(hour: hour, on: day),
+                                                                        toGranularity: .hour
+                                                                    )
                                                                 }
                                                             }
+                                                            return []
+                                                        }()
+
+                                                        // Render events (if any)
+                                                        ForEach(matchingSlots) { slot in
+                                                            EventCell(slot: slot)
+                                                                .padding(8)
+                                                                .contentShape(Rectangle())
+                                                                .onTapGesture {
+                                                                    handleSlotTap(slot, defaultDay: day, defaultHour: hour)
+                                                                }
                                                         }
                                                     }
                                                     .frame(width: dayColumnWidth, height: rowHeight)
                                                     .padding(.horizontal, 6)
                                                     .contentShape(Rectangle())
                                                     .onTapGesture {
+                                                        // Only open editor if there is no event occupying this cell
+                                                        let key = DateOnly(day)
+                                                        let hasEvent = (viewModel.slotsByDay[key] ?? []).contains {
+                                                            Calendar.current.isDate(
+                                                                $0.startTime,
+                                                                equalTo: dateBySetting(hour: hour, on: day),
+                                                                toGranularity: .hour
+                                                            )
+                                                        }
+                                                        guard !hasEvent else { return }
                                                         editorDay = day
                                                         editorHour = hour
                                                         editorShown = true
@@ -244,6 +268,18 @@ struct ScheduleView: View {
                 AllTrainersDayView(scheduleViewModel: viewModel)
                     .environmentObject(auth)
             }
+            .sheet(isPresented: $clientSheetShown, onDismiss: {
+                selectedClient = nil
+            }, content: {
+                if let client = selectedClient {
+                    ClientDetailSheet(client: client)
+                        .presentationDetents([.medium, .large])
+                } else {
+                    // This should rarely show now; we present after data arrives.
+                    ProgressView("Loading…")
+                        .padding()
+                }
+            })
         }
     }
 
@@ -343,6 +379,28 @@ struct ScheduleView: View {
         let fraction = CGFloat(min(max(minute, 0), 59)) / 60.0
         return initialTopPadding + (wholeHours + fraction) * perHourHeight
     }
+
+    private func handleSlotTap(_ slot: TrainerScheduleSlot, defaultDay: Date, defaultHour: Int) {
+        // If booked, show client info; else fall back to opening editor
+        if slot.isBooked, let clientId = slot.clientId {
+            Task {
+                let fetched = try? await FirestoreService.shared.fetchClient(by: clientId)
+                await MainActor.run {
+                    // Always set a non-nil model before presenting
+                    if let client = fetched {
+                        self.selectedClient = client
+                    } else {
+                        self.selectedClient = Client(id: clientId, firstName: slot.clientName ?? "Booked", lastName: "", emailAddress: "", phoneNumber: "", photoURL: nil)
+                    }
+                    self.clientSheetShown = true
+                }
+            }
+        } else {
+            editorDay = defaultDay
+            editorHour = defaultHour
+            editorShown = true
+        }
+    }
 }
 
 private struct EventCell: View {
@@ -356,6 +414,8 @@ private struct EventCell: View {
             Text(slot.displayTitle)
                 .font(.caption)
                 .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.tail)
             Spacer()
         }
         .padding(8)
@@ -365,3 +425,60 @@ private struct EventCell: View {
         )
     }
 }
+
+private struct ClientDetailSheet: View {
+    let client: Client
+
+    var body: some View {
+        VStack(spacing: 16) {
+            if let urlString = client.photoURL, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .empty:
+                        Circle().fill(Color.gray.opacity(0.2))
+                            .frame(width: 72, height: 72)
+                            .overlay(ProgressView())
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 72, height: 72)
+                            .clipShape(Circle())
+                    case .failure:
+                        Circle().fill(Color.gray.opacity(0.2))
+                            .frame(width: 72, height: 72)
+                            .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
+                    @unknown default:
+                        Circle().fill(Color.gray.opacity(0.2))
+                            .frame(width: 72, height: 72)
+                    }
+                }
+            } else {
+                Circle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 72, height: 72)
+                    .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
+            }
+
+            VStack(spacing: 4) {
+                Text(client.fullName)
+                    .font(.title3.weight(.semibold))
+                if !client.emailAddress.isEmpty {
+                    Text(client.emailAddress)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if !client.phoneNumber.isEmpty {
+                    Text(client.phoneNumber)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+        }
+        .padding()
+        .presentationDragIndicator(.visible)
+    }
+}
+

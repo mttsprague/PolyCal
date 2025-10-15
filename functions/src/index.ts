@@ -139,7 +139,7 @@ export const bookLesson = functions.https.onCall(
         // Check if the trainer slot is currently available.
         if (
           trainerSlotData.status !== "open" ||
-          trainerSlotData.clientId !== null
+          trainerSlotData.clientId !== null && trainerSlotData.clientId !== undefined
         ) {
           throw new functions.https.HttpsError(
             "failed-precondition",

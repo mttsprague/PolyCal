@@ -12,7 +12,7 @@ struct TrainerScheduleSlot: Identifiable, Codable, Hashable {
     enum Status: String, Codable {
         case open
         case unavailable
-        // Derived status (booked) will be inferred if clientId is set
+        case booked
     }
 
     var id: String
@@ -25,7 +25,8 @@ struct TrainerScheduleSlot: Identifiable, Codable, Hashable {
     var bookedAt: Date?
     var updatedAt: Date? // Added to match schema
 
-    var isBooked: Bool { clientId != nil }
+    // Consider a slot booked if the backend sets status to "booked" OR if clientId is present.
+    var isBooked: Bool { status == .booked || clientId != nil }
 
     var displayTitle: String {
         if isBooked {
@@ -34,6 +35,7 @@ struct TrainerScheduleSlot: Identifiable, Codable, Hashable {
         switch status {
         case .open: return "Open"
         case .unavailable: return "Unavailable"
+        case .booked: return clientName ?? "Booked"
         }
     }
 
@@ -42,6 +44,7 @@ struct TrainerScheduleSlot: Identifiable, Codable, Hashable {
         switch status {
         case .open: return .green
         case .unavailable: return .red
+        case .booked: return .blue
         }
     }
 }

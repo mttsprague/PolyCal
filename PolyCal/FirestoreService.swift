@@ -254,4 +254,33 @@ final class FirestoreService {
         ]
         #endif
     }
+
+    // MARK: - Single client fetch
+    func fetchClient(by uid: String) async throws -> Client? {
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        let snap = try await db.collection("users").document(uid).getDocument()
+        guard let data = snap.data() else { return nil }
+        guard
+            let firstName = data["firstName"] as? String,
+            let lastName = data["lastName"] as? String,
+            let emailAddress = data["emailAddress"] as? String
+        else {
+            return nil
+        }
+        let phoneNumber = data["phoneNumber"] as? String ?? ""
+        let photoURL = data["photoURL"] as? String
+        return Client(
+            id: snap.documentID,
+            firstName: firstName,
+            lastName: lastName,
+            emailAddress: emailAddress,
+            phoneNumber: phoneNumber,
+            photoURL: photoURL
+        )
+        #else
+        return Client(id: "client_demo", firstName: "Alex", lastName: "Smith", emailAddress: "alex@example.com", phoneNumber: "555-123-4567", photoURL: nil)
+        #endif
+    }
 }
+
