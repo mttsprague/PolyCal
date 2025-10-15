@@ -43,6 +43,9 @@ final class FirestoreService {
         let startTs = Timestamp(date: from)
         let endTs = Timestamp(date: to)
 
+        // We still query by startTime where possible; this will include all documents
+        // that have startTime populated. We will also attempt to decode documents that
+        // might be missing those fields by parsing the document ID formats.
         let snapshot = try await db.collection("trainers")
             .document(trainerId)
             .collection("schedules")
@@ -51,42 +54,119 @@ final class FirestoreService {
             .order(by: "startTime")
             .getDocuments()
 
-        let slots: [TrainerScheduleSlot] = snapshot.documents.compactMap { doc in
-            let data = doc.data()
-
-            // Required fields
-            guard
-                let statusRaw = data["status"] as? String,
-                let status = TrainerScheduleSlot.Status(rawValue: statusRaw),
-                let startTs = data["startTime"] as? Timestamp,
-                let endTs = data["endTime"] as? Timestamp
-            else {
-                return nil
-            }
-
-            // Optional fields
-            let clientId = data["clientId"] as? String
-            let clientName = data["clientName"] as? String
-            let bookedAt = (data["bookedAt"] as? Timestamp)?.dateValue()
-            let updatedAt = (data["updatedAt"] as? Timestamp)?.dateValue()
-
-            return TrainerScheduleSlot(
-                id: doc.documentID,
-                trainerId: trainerId,
-                status: status,
-                startTime: startTs.dateValue(),
-                endTime: endTs.dateValue(),
-                clientId: clientId,
-                clientName: clientName,
-                bookedAt: bookedAt,
-                updatedAt: updatedAt
-            )
+        var slots: [TrainerScheduleSlot] = snapshot.documents.compactMap { doc in
+            decodeScheduleDoc(trainerId: trainerId, doc: doc)
         }
+
+        // Additionally, fetch any docs in range that might not have startTime set (legacy or new minimal docs).
+        // Firestore can’t query by ID range directly, so we perform a second pass: fetch the whole week collection
+        // and locally filter by parsed ID. This keeps the first query efficient for normal cases.
+        let weekAllSnap = try await db.collection("trainers")
+            .document(trainerId)
+            .collection("schedules")
+            .getDocuments()
+
+        let extra = weekAllSnap.documents.compactMap { doc -> TrainerScheduleSlot? in
+            // Skip if already included above
+            if slots.contains(where: { $0.id == doc.documentID }) { return nil }
+            guard let parsed = parseDocId(doc.documentID) else { return nil }
+            // Keep only those in range [from, to)
+            guard parsed.start >= from && parsed.start < to else { return nil }
+            return decodeScheduleDoc(trainerId: trainerId, doc: doc, fallback: parsed)
+        }
+
+        slots.append(contentsOf: extra)
+        // Sort by start time for stable display
+        slots.sort { $0.startTime < $1.startTime }
         return slots
         #else
         // No Firestore in this build; return empty to keep app usable
         return []
         #endif
+    }
+
+    // Attempt to decode a schedule document. If fields are missing, use fallback parsed from doc ID (if provided).
+    #if canImport(FirebaseFirestore)
+    private func decodeScheduleDoc(trainerId: String, doc: QueryDocumentSnapshot, fallback: (start: Date, end: Date)? = nil) -> TrainerScheduleSlot? {
+        let data = doc.data()
+
+        // Status (default to open if absent)
+        let status: TrainerScheduleSlot.Status = {
+            if let raw = data["status"] as? String, let s = TrainerScheduleSlot.Status(rawValue: raw) {
+                return s
+            } else {
+                return .open
+            }
+        }()
+
+        // Start/End
+        let startDate: Date? = (data["startTime"] as? Timestamp)?.dateValue() ?? fallback?.start
+        let endDate: Date? = (data["endTime"] as? Timestamp)?.dateValue() ?? fallback?.end
+
+        guard let start = startDate, let end = endDate else {
+            // Try to parse from doc ID if no explicit fallback was provided
+            if fallback == nil, let parsed = parseDocId(doc.documentID) {
+                return TrainerScheduleSlot(
+                    id: doc.documentID,
+                    trainerId: trainerId,
+                    status: status,
+                    startTime: parsed.start,
+                    endTime: parsed.end,
+                    clientId: data["clientId"] as? String,
+                    clientName: data["clientName"] as? String,
+                    bookedAt: (data["bookedAt"] as? Timestamp)?.dateValue(),
+                    updatedAt: (data["updatedAt"] as? Timestamp)?.dateValue()
+                )
+            }
+            return nil
+        }
+
+        return TrainerScheduleSlot(
+            id: doc.documentID,
+            trainerId: trainerId,
+            status: status,
+            startTime: start,
+            endTime: end,
+            clientId: data["clientId"] as? String,
+            clientName: data["clientName"] as? String,
+            bookedAt: (data["bookedAt"] as? Timestamp)?.dateValue(),
+            updatedAt: (data["updatedAt"] as? Timestamp)?.dateValue()
+        )
+    }
+    #endif
+
+    // Parse known document ID formats into start/end dates (UTC):
+    // - New: "YYYY-MM-DDTHH" (hour slot)
+    // - Old: "<startEpochMillis>-<endEpochMillis>"
+    private func parseDocId(_ id: String) -> (start: Date, end: Date)? {
+        // New format: 2025-10-15T20
+        if id.count == 13, id[id.index(id.startIndex, offsetBy: 10)] == "T" {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+            let parts = id.split(separator: "T")
+            if parts.count == 2 {
+                let datePart = parts[0] // YYYY-MM-DD
+                let hourPart = parts[1] // HH
+                let datePieces = datePart.split(separator: "-")
+                if datePieces.count == 3, let y = Int(datePieces[0]), let m = Int(datePieces[1]), let d = Int(datePieces[2]), let h = Int(hourPart) {
+                    var comps = DateComponents()
+                    comps.year = y; comps.month = m; comps.day = d; comps.hour = h
+                    if let start = calendar.date(from: comps), let end = calendar.date(byAdding: .hour, value: 1, to: start) {
+                        return (start, end)
+                    }
+                }
+            }
+        }
+
+        // Old format: 1761080400000-1761084000000
+        let parts = id.split(separator: "-")
+        if parts.count == 2, let startMs = Double(parts[0]), let endMs = Double(parts[1]) {
+            let start = Date(timeIntervalSince1970: startMs / 1000.0)
+            let end = Date(timeIntervalSince1970: endMs / 1000.0)
+            return (start, end)
+        }
+
+        return nil
     }
 
     // MARK: - Schedule (write APIs)

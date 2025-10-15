@@ -15,10 +15,9 @@ struct AvailabilityEditorSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    // Single-slot state
+    // Single-slot state (hour-only; end is always start + 1 hour)
     @State private var singleDay: Date
-    @State private var singleStart: Date
-    @State private var singleEnd: Date
+    @State private var singleStartHour: Int
     @State private var singleStatus: TrainerScheduleSlot.Status = .open
 
     // Recurring toggle and inputs
@@ -44,13 +43,8 @@ struct AvailabilityEditorSheet: View {
         self.onSaveSingle = onSaveSingle
         self.onSaveOngoing = onSaveOngoing
 
-        // Initialize state with provided defaults
-        let cal = Calendar.current
         _singleDay = State(initialValue: defaultDay)
-        let start = cal.date(bySettingHour: defaultHour, minute: 0, second: 0, of: defaultDay) ?? defaultDay
-        let end = cal.date(byAdding: .hour, value: 1, to: start) ?? start.addingTimeInterval(3600)
-        _singleStart = State(initialValue: start)
-        _singleEnd = State(initialValue: end)
+        _singleStartHour = State(initialValue: defaultHour)
 
         _recurringStartHour = State(initialValue: defaultHour)
         _recurringEndHour = State(initialValue: min(defaultHour + 1, 23))
@@ -66,7 +60,7 @@ struct AvailabilityEditorSheet: View {
                 }
                 .pickerStyle(.segmented)
 
-                // Single-slot editor
+                // Single-slot editor (hour-only)
                 singleSection
 
                 // Recurring editor (toggle on/off, then show details)
@@ -80,7 +74,6 @@ struct AvailabilityEditorSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { saveSingle() }
-                        .disabled(singleSaveDisabled)
                 }
             }
         }
@@ -90,21 +83,16 @@ struct AvailabilityEditorSheet: View {
         Section("Single Slot") {
             DatePicker("Day", selection: $singleDay, displayedComponents: .date)
 
-            DatePicker("Start", selection: $singleStart, displayedComponents: .hourAndMinute)
-                .onChange(of: singleStart) { _, newValue in
-                    // Keep end > start
-                    if singleEnd <= newValue {
-                        singleEnd = Calendar.current.date(byAdding: .minute, value: 30, to: newValue) ?? newValue
-                    }
-                }
+            HourPickerRow(title: "Start Hour", hour: $singleStartHour)
 
-            DatePicker("End", selection: $singleEnd, in: singleStart..., displayedComponents: .hourAndMinute)
-        }
-        .onChange(of: singleDay) { _, newDay in
-            // Re-anchor start/end to selected day keeping times
-            let cal = Calendar.current
-            singleStart = anchor(time: singleStart, toDay: newDay, calendar: cal)
-            singleEnd = max(anchor(time: singleEnd, toDay: newDay, calendar: cal), singleStart)
+            HStack {
+                Text("End")
+                Spacer()
+                Text(hourLabel((singleStartHour + 1) % 24))
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("End hour \(hourLabel((singleStartHour + 1) % 24))")
         }
     }
 
@@ -187,17 +175,10 @@ struct AvailabilityEditorSheet: View {
         }
     }
 
-    private var singleSaveDisabled: Bool {
-        singleEnd <= singleStart
-    }
-
     private var recurringDisabled: Bool {
         guard recurringEnabled else { return false }
-        // Need at least one day selected
         if selectedWeekdays.isEmpty { return true }
-        // Validate daily window
         if recurringEndHour <= recurringStartHour { return true }
-        // Validate date range
         let start = bulkStartDate ?? Calendar.current.startOfDay(for: defaultDay)
         if let end = bulkEndDate, end < start { return true }
         return false
@@ -205,9 +186,9 @@ struct AvailabilityEditorSheet: View {
 
     private func saveSingle() {
         let cal = Calendar.current
-        let startOnDay = anchor(time: singleStart, toDay: singleDay, calendar: cal)
-        let endOnDay = anchor(time: singleEnd, toDay: singleDay, calendar: cal)
-        onSaveSingle(singleDay, startOnDay, endOnDay, singleStatus)
+        let start = cal.date(bySettingHour: singleStartHour, minute: 0, second: 0, of: singleDay) ?? singleDay
+        let end = cal.date(byAdding: .hour, value: 1, to: start) ?? start.addingTimeInterval(3600)
+        onSaveSingle(singleDay, start, end, singleStatus)
         dismiss()
     }
 
@@ -220,13 +201,10 @@ struct AvailabilityEditorSheet: View {
         dismiss()
     }
 
-    private func anchor(time: Date, toDay day: Date, calendar cal: Calendar) -> Date {
-        let t = cal.dateComponents([.hour, .minute, .second], from: time)
-        var d = cal.dateComponents([.year, .month, .day], from: day)
-        d.hour = t.hour
-        d.minute = t.minute
-        d.second = t.second
-        return cal.date(from: d) ?? day
+    private func hourLabel(_ hour: Int) -> String {
+        let comps = DateComponents(calendar: Calendar.current, hour: hour)
+        let date = comps.date ?? Date()
+        return date.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)))
     }
 }
 
@@ -265,7 +243,6 @@ private struct FlexibleWeekdayChips: View {
     }
 
     private func shortSymbol(_ index: Int) -> String {
-        // Use provided short symbols (e.g., "Sun", "Mon", ...)
         let i = max(0, min(6, index))
         return String(weekdaySymbols[i].prefix(3))
     }
@@ -295,40 +272,3 @@ private struct HourPickerRow: View {
     }
 }
 
-private struct OptionalDatePickerRow: View {
-    let title: String
-    @Binding var date: Date?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle(isOn: Binding(
-                get: { date != nil },
-                set: { newValue in
-                    if newValue {
-                        if date == nil {
-                            date = Calendar.current.startOfDay(for: Date())
-                        }
-                    } else {
-                        date = nil
-                    }
-                }
-            )) {
-                Text(title)
-            }
-
-            if let current = date {
-                DatePicker(
-                    "",
-                    selection: Binding<Date>(
-                        get: { current },
-                        set: { newValue in date = newValue }
-                    ),
-                    displayedComponents: .date
-                )
-                .datePickerStyle(.compact)
-                .labelsHidden()
-                .padding(.leading, 32)
-            }
-        }
-    }
-}

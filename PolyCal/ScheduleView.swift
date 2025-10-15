@@ -35,6 +35,9 @@ struct ScheduleView: View {
     private let columnSpacing: CGFloat = 0            // spacing between day columns
     private let gridHeaderVPad: CGFloat = 6           // compact vertical padding for day header
 
+    // Shared horizontal scroll position for header + grid
+    @State private var hScrollOffset: CGFloat = 0
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -56,11 +59,12 @@ struct ScheduleView: View {
                 let headerRowHeight = 28.0 // height of the day header stack (approx)
 
                 ZStack(alignment: .topLeading) {
+                    // Vertical content: time column + grid (no day header inside; we overlay it frozen)
                     ScrollView(.vertical, showsIndicators: true) {
                         HStack(spacing: 0) {
                             // Fixed left time column (does not scroll horizontally)
                             VStack(spacing: 0) {
-                                // Spacer to align under the day header height
+                                // Spacer to align under the frozen day header height
                                 Color.clear
                                     .frame(height: headerRowHeight + gridHeaderVPad * 2)
 
@@ -78,28 +82,10 @@ struct ScheduleView: View {
                             .frame(width: timeColWidth)
                             .background(Color(UIColor.systemGray6))
 
-                            // Right side: days header + grid share the same horizontal scroll view
-                            ScrollView(.horizontal, showsIndicators: true) {
+                            // Right side: horizontally scrolling GRID only (header is overlaid above)
+                            SynchronizedHScrollView(contentOffsetX: $hScrollOffset) {
                                 VStack(spacing: 0) {
-                                    // Day header row (scrolls horizontally with grid)
-                                    HStack(spacing: columnSpacing) {
-                                        ForEach(viewModel.weekDays, id: \.self) { day in
-                                            VStack(spacing: 2) {
-                                                Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                                                    .font(.caption2.weight(.semibold))
-                                                    .foregroundStyle(.secondary)
-                                                Text(day, format: .dateTime.month(.abbreviated).day())
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                            .frame(width: dayColumnWidth)
-                                        }
-                                    }
-                                    .padding(.vertical, gridHeaderVPad)
-                                    .padding(.leading, 6)
-                                    .padding(.trailing, 8)
-
-                                    // Grid rows (scroll horizontally with the header)
+                                    // Grid rows (scroll horizontally)
                                     VStack(spacing: 0) {
                                         ForEach(viewModel.visibleHours, id: \.self) { hour in
                                             HStack(spacing: columnSpacing) {
@@ -177,26 +163,50 @@ struct ScheduleView: View {
                                     }
                                     .padding(.bottom, 8)
                                 }
+                                .padding(.leading, 6)    // match header’s leading padding
+                                .padding(.trailing, 8)   // match header’s trailing padding
                             }
                         }
                         .background(Color(UIColor.systemGray6))
                     }
 
-                    // Current time bar – position by vertical offset; spans the right side content
-                    TimelineView(.everyMinute) { context in
-                        if let y = currentTimeYOffset(for: context.date,
-                                                      firstHour: viewModel.visibleHours.first,
-                                                      rowHeight: rowHeight,
-                                                      rowVerticalPadding: rowVerticalPadding) {
-                            Rectangle()
-                                .fill(Color.red)
-                                .frame(height: 2)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .offset(x: 0, y: (headerRowHeight + gridHeaderVPad * 2) + y)
-                                .accessibilityHidden(true)
+                    // Frozen day header row: horizontally scrolls in sync with grid, stays visible on vertical scroll
+                    VStack(spacing: 0) {
+                        SynchronizedHScrollView(contentOffsetX: $hScrollOffset) {
+                            HStack(spacing: columnSpacing) {
+                                ForEach(viewModel.weekDays, id: \.self) { day in
+                                    VStack(spacing: 2) {
+                                        Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundStyle(.secondary)
+                                        Text(day, format: .dateTime.month(.abbreviated).day())
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .frame(width: dayColumnWidth)
+                                }
+                            }
+                            .padding(.leading, 6)
+                            .padding(.trailing, 8)
+                            .padding(.vertical, gridHeaderVPad)
                         }
+                        .background(Color(UIColor.systemGray6))
+                        .overlay(
+                            Rectangle()
+                                .fill(Color(UIColor.systemGray3))
+                                .frame(height: 0.5)
+                                .frame(maxWidth: .infinity)
+                                .alignmentGuide(.top) { d in d[.top] }
+                            , alignment: .bottom
+                        )
+
+                        // Thin divider between header and grid
+                        Color.clear.frame(height: 0) // placeholder if needed
                     }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .offset(x: timeColWidth) // position over the grid area (to the right of time column)
                 }
+
             }
             .navigationBarHidden(true)
             .task {
@@ -479,6 +489,82 @@ private struct ClientDetailSheet: View {
         }
         .padding()
         .presentationDragIndicator(.visible)
+    }
+}
+
+// MARK: - Helper: Synchronized horizontal scroll view using UIScrollView
+
+private struct SynchronizedHScrollView<Content: View>: UIViewRepresentable {
+    @Binding var contentOffsetX: CGFloat
+    var showsIndicators: Bool = true
+    let content: Content
+
+    init(contentOffsetX: Binding<CGFloat>, showsIndicators: Bool = true, @ViewBuilder content: () -> Content) {
+        self._contentOffsetX = contentOffsetX
+        self.showsIndicators = showsIndicators
+        self.content = content()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeUIView(context: Context) -> UIScrollView {
+        let scrollView = UIScrollView()
+        scrollView.showsHorizontalScrollIndicator = showsIndicators
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.alwaysBounceHorizontal = true
+        scrollView.alwaysBounceVertical = false
+        scrollView.isPagingEnabled = false
+        scrollView.delegate = context.coordinator
+
+        // Host SwiftUI content
+        let hosting = UIHostingController(rootView: content)
+        hosting.view.translatesAutoresizingMaskIntoConstraints = false
+        hosting.view.backgroundColor = .clear
+
+        scrollView.addSubview(hosting.view)
+
+        // Constrain hosting view to scroll view's content layout
+        NSLayoutConstraint.activate([
+            hosting.view.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            hosting.view.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            hosting.view.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            hosting.view.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+
+            // Height matches scroll view (no vertical scrolling)
+            hosting.view.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor)
+        ])
+
+        context.coordinator.hostingController = hosting
+        return scrollView
+    }
+
+    func updateUIView(_ scrollView: UIScrollView, context: Context) {
+        // Update hosted content
+        context.coordinator.hostingController?.rootView = content
+
+        // If binding changed externally, update scroll position (without feedback loop)
+        if abs(scrollView.contentOffset.x - contentOffsetX) > 0.5 {
+            scrollView.setContentOffset(CGPoint(x: contentOffsetX, y: 0), animated: false)
+        }
+    }
+
+    class Coordinator: NSObject, UIScrollViewDelegate {
+        var parent: SynchronizedHScrollView
+        weak var hostingController: UIHostingController<Content>?
+
+        init(_ parent: SynchronizedHScrollView) {
+            self.parent = parent
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            // Propagate horizontal offset back to SwiftUI
+            let newX = scrollView.contentOffset.x
+            if abs(parent.contentOffsetX - newX) > 0.5 {
+                parent.contentOffsetX = newX
+            }
+        }
     }
 }
 
