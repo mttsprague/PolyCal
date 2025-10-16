@@ -92,14 +92,29 @@ struct DayScheduleView: View {
 
     private func handleTap(_ slot: TrainerScheduleSlot) async {
         guard slot.isBooked, let clientId = slot.clientId else { return }
+
+        // 1) Present immediately from cache or placeholder
+        if let cached = viewModel.clientsById[clientId] {
+            self.selectedClient = cached
+        } else {
+            self.selectedClient = Client(
+                id: clientId,
+                firstName: slot.clientName ?? "Booked",
+                lastName: "",
+                emailAddress: "",
+                phoneNumber: "",
+                photoURL: nil
+            )
+        }
+        self.clientSheetShown = true
+
+        // 2) Fetch in background and update when ready
         let fetched = try? await FirestoreService.shared.fetchClient(by: clientId)
         await MainActor.run {
             if let client = fetched {
                 self.selectedClient = client
-            } else {
-                self.selectedClient = Client(id: clientId, firstName: slot.clientName ?? "Booked", lastName: "", emailAddress: "", phoneNumber: "", photoURL: nil)
+                viewModel.clientsById[clientId] = client
             }
-            self.clientSheetShown = true
         }
     }
 
@@ -252,23 +267,23 @@ private struct ClientDetailSheet: View {
             if let urlString = client.photoURL, let url = URL(string: urlString) {
                 AsyncImage(url: url) { phase in
                     switch phase {
-                    case .empty:
-                        Circle().fill(Color.gray.opacity(0.2))
-                            .frame(width: 72, height: 72)
-                            .overlay(ProgressView())
                     case .success(let image):
                         image
                             .resizable()
                             .scaledToFill()
                             .frame(width: 72, height: 72)
                             .clipShape(Circle())
-                    case .failure:
-                        Circle().fill(Color.gray.opacity(0.2))
+                            .transition(.opacity)
+                    case .empty, .failure:
+                        Circle()
+                            .fill(Color.gray.opacity(0.2))
                             .frame(width: 72, height: 72)
                             .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
                     @unknown default:
-                        Circle().fill(Color.gray.opacity(0.2))
+                        Circle()
+                            .fill(Color.gray.opacity(0.2))
                             .frame(width: 72, height: 72)
+                            .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
                     }
                 }
             } else {

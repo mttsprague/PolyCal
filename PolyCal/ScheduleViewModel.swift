@@ -30,6 +30,9 @@ final class ScheduleViewModel: ObservableObject {
     @Published var visibleHours: [Int] = Array(6...20) // 6am - 8pm
     @Published var slotsByDay: [DateOnly: [TrainerScheduleSlot]] = [:]
 
+    // Client cache for instant presentation
+    @Published var clientsById: [String: Client] = [:]
+
     private let scheduleRepo = ScheduleRepository()
 
     init() {
@@ -115,8 +118,43 @@ final class ScheduleViewModel: ObservableObject {
                 grouped[key]?.sort { $0.startTime < $1.startTime }
             }
             self.slotsByDay = grouped
+
+            // Prefetch clients for all booked slots in this week
+            await prefetchClientsForVisibleWeek()
         } catch {
             self.slotsByDay = [:]
+        }
+    }
+
+    // MARK: - Prefetch clients for instant sheet presentation
+    func prefetchClientsForVisibleWeek() async {
+        // Collect unique client IDs from booked slots
+        let allIds = Set(slotsByDay.values.flatMap { daySlots in
+            daySlots.compactMap { $0.isBooked ? $0.clientId : nil }
+        })
+        // Skip any already cached
+        let missing = allIds.subtracting(clientsById.keys)
+        guard !missing.isEmpty else { return }
+
+        // Fetch concurrently off the main actor
+        var fetched: [String: Client] = [:]
+        await withTaskGroup(of: (String, Client?).self) { group in
+            for id in missing {
+                group.addTask {
+                    let client = try? await FirestoreService.shared.fetchClient(by: id)
+                    return (id, client)
+                }
+            }
+            for await (id, client) in group {
+                if let client {
+                    fetched[id] = client
+                }
+            }
+        }
+
+        // Merge into cache
+        for (id, client) in fetched {
+            clientsById[id] = client
         }
     }
 
@@ -194,3 +232,4 @@ final class ScheduleViewModel: ObservableObject {
         }
     }
 }
+

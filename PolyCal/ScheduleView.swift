@@ -383,16 +383,30 @@ struct ScheduleView: View {
     private func handleSlotTap(_ slot: TrainerScheduleSlot, defaultDay: Date, defaultHour: Int) {
         // If booked, show client info; else fall back to opening editor
         if slot.isBooked, let clientId = slot.clientId {
+            // 1) Present immediately from cache or placeholder
+            if let cached = viewModel.clientsById[clientId] {
+                self.selectedClient = cached
+            } else {
+                self.selectedClient = Client(
+                    id: clientId,
+                    firstName: slot.clientName ?? "Booked",
+                    lastName: "",
+                    emailAddress: "",
+                    phoneNumber: "",
+                    photoURL: nil
+                )
+            }
+            self.clientSheetShown = true
+
+            // 2) Fetch in background and update when ready
             Task {
                 let fetched = try? await FirestoreService.shared.fetchClient(by: clientId)
                 await MainActor.run {
-                    // Always set a non-nil model before presenting
                     if let client = fetched {
                         self.selectedClient = client
-                    } else {
-                        self.selectedClient = Client(id: clientId, firstName: slot.clientName ?? "Booked", lastName: "", emailAddress: "", phoneNumber: "", photoURL: nil)
+                        // Update cache for next time
+                        viewModel.clientsById[clientId] = client
                     }
-                    self.clientSheetShown = true
                 }
             }
         } else {
@@ -434,23 +448,23 @@ private struct ClientDetailSheet: View {
             if let urlString = client.photoURL, let url = URL(string: urlString) {
                 AsyncImage(url: url) { phase in
                     switch phase {
-                    case .empty:
-                        Circle().fill(Color.gray.opacity(0.2))
-                            .frame(width: 72, height: 72)
-                            .overlay(ProgressView())
                     case .success(let image):
                         image
                             .resizable()
                             .scaledToFill()
                             .frame(width: 72, height: 72)
                             .clipShape(Circle())
-                    case .failure:
-                        Circle().fill(Color.gray.opacity(0.2))
+                            .transition(.opacity)
+                    case .empty, .failure:
+                        Circle()
+                            .fill(Color.gray.opacity(0.2))
                             .frame(width: 72, height: 72)
                             .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
                     @unknown default:
-                        Circle().fill(Color.gray.opacity(0.2))
+                        Circle()
+                            .fill(Color.gray.opacity(0.2))
                             .frame(width: 72, height: 72)
+                            .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
                     }
                 }
             } else {
