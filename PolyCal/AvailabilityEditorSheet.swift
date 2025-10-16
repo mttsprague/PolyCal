@@ -83,28 +83,37 @@ struct AvailabilityEditorSheet: View {
                         .disabled(singleSaveDisabled)
                 }
             }
+            // Ensure initial values obey the rules on first appearance
+            .onAppear {
+                snapAndSyncTimes()
+            }
         }
     }
 
     private var singleSection: some View {
         Section("Single Slot") {
             DatePicker("Day", selection: $singleDay, displayedComponents: .date)
-
-            DatePicker("Start", selection: $singleStart, displayedComponents: .hourAndMinute)
-                .onChange(of: singleStart) { _, newValue in
-                    // Keep end > start
-                    if singleEnd <= newValue {
-                        singleEnd = Calendar.current.date(byAdding: .minute, value: 30, to: newValue) ?? newValue
-                    }
+                .onChange(of: singleDay) { _, _ in
+                    // Re-anchor both times to selected day, keep on-the-hour and end >= start + 1h
+                    snapAndSyncTimes(anchorToDay: true)
                 }
 
-            DatePicker("End", selection: $singleEnd, in: singleStart..., displayedComponents: .hourAndMinute)
-        }
-        .onChange(of: singleDay) { _, newDay in
-            // Re-anchor start/end to selected day keeping times
-            let cal = Calendar.current
-            singleStart = anchor(time: singleStart, toDay: newDay, calendar: cal)
-            singleEnd = max(anchor(time: singleEnd, toDay: newDay, calendar: cal), singleStart)
+            // Start time: editable, snaps to the hour; end is kept >= start + 1 hour
+            DatePicker("Start", selection: $singleStart, displayedComponents: .hourAndMinute)
+                .onChange(of: singleStart) { _, _ in
+                    snapAndSyncTimes()
+                }
+
+            // End time: editable, snaps to the hour; must be >= start + 1 hour
+            DatePicker(
+                "End",
+                selection: $singleEnd,
+                in: (Calendar.current.date(byAdding: .hour, value: 1, to: singleStart) ?? singleStart.addingTimeInterval(3600))...,
+                displayedComponents: .hourAndMinute
+            )
+            .onChange(of: singleEnd) { _, _ in
+                snapAndSyncTimes()
+            }
         }
     }
 
@@ -127,7 +136,7 @@ struct AvailabilityEditorSheet: View {
                         )
                         .frame(maxWidth: .infinity, alignment: .center)
 
-                        // Common daily window
+                        // Common daily window (hour precision)
                         HourPickerRow(title: "Daily Start", hour: $recurringStartHour)
                         HourPickerRow(title: "Daily End", hour: $recurringEndHour)
                             .onChange(of: recurringEndHour) { _, newValue in
@@ -205,8 +214,10 @@ struct AvailabilityEditorSheet: View {
 
     private func saveSingle() {
         let cal = Calendar.current
-        let startOnDay = anchor(time: singleStart, toDay: singleDay, calendar: cal)
-        let endOnDay = anchor(time: singleEnd, toDay: singleDay, calendar: cal)
+        let startOnDay = roundDownToHour(anchor(time: singleStart, toDay: singleDay, calendar: cal), calendar: cal)
+        let minEnd = cal.date(byAdding: .hour, value: 1, to: startOnDay) ?? startOnDay.addingTimeInterval(3600)
+        var endOnDay = roundDownToHour(anchor(time: singleEnd, toDay: singleDay, calendar: cal), calendar: cal)
+        if endOnDay < minEnd { endOnDay = minEnd }
         onSaveSingle(singleDay, startOnDay, endOnDay, singleStatus)
         dismiss()
     }
@@ -220,6 +231,28 @@ struct AvailabilityEditorSheet: View {
         dismiss()
     }
 
+    // MARK: - Helpers
+
+    private func snapAndSyncTimes(anchorToDay: Bool = false) {
+        let cal = Calendar.current
+
+        // Optionally re-anchor both to the selected day
+        if anchorToDay {
+            singleStart = anchor(time: singleStart, toDay: singleDay, calendar: cal)
+            singleEnd = anchor(time: singleEnd, toDay: singleDay, calendar: cal)
+        }
+
+        // Snap both to the hour
+        singleStart = roundDownToHour(singleStart, calendar: cal)
+        singleEnd = roundDownToHour(singleEnd, calendar: cal)
+
+        // Ensure end >= start + 1 hour
+        let minEnd = cal.date(byAdding: .hour, value: 1, to: singleStart) ?? singleStart.addingTimeInterval(3600)
+        if singleEnd < minEnd {
+            singleEnd = minEnd
+        }
+    }
+
     private func anchor(time: Date, toDay day: Date, calendar cal: Calendar) -> Date {
         let t = cal.dateComponents([.hour, .minute, .second], from: time)
         var d = cal.dateComponents([.year, .month, .day], from: day)
@@ -227,6 +260,11 @@ struct AvailabilityEditorSheet: View {
         d.minute = t.minute
         d.second = t.second
         return cal.date(from: d) ?? day
+    }
+
+    private func roundDownToHour(_ date: Date, calendar cal: Calendar) -> Date {
+        let comps = cal.dateComponents([.year, .month, .day, .hour], from: date)
+        return cal.date(from: comps) ?? date
     }
 }
 
@@ -265,7 +303,6 @@ private struct FlexibleWeekdayChips: View {
     }
 
     private func shortSymbol(_ index: Int) -> String {
-        // Use provided short symbols (e.g., "Sun", "Mon", ...)
         let i = max(0, min(6, index))
         return String(weekdaySymbols[i].prefix(3))
     }

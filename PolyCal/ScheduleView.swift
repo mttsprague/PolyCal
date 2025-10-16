@@ -236,6 +236,8 @@ struct ScheduleView: View {
                         }
                     }
                 )
+                // Force a fresh editor identity per tapped cell so defaults update correctly
+                .id(editorDay.timeIntervalSinceReferenceDate + Double(editorHour))
                 .presentationDetents([.medium, .large])
             }
             .sheet(isPresented: $showOptions) {
@@ -493,4 +495,3 @@ private struct ClientDetailSheet: View {
         .presentationDragIndicator(.visible)
     }
 }
-
