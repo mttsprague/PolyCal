@@ -43,7 +43,10 @@ final class FirestoreService {
         let startTs = Timestamp(date: from)
         let endTs = Timestamp(date: to)
 
-        let snapshot = try await db.collection("trainers")
+        var mergedById: [String: TrainerScheduleSlot] = [:]
+
+        // --- 1) Fetch open/unavailable slots from trainer subcollection
+        let trainerScheduleSnapshot = try await db.collection("trainers")
             .document(trainerId)
             .collection("schedules")
             .whereField("startTime", isGreaterThanOrEqualTo: startTs)
@@ -51,7 +54,7 @@ final class FirestoreService {
             .order(by: "startTime")
             .getDocuments()
 
-        let slots: [TrainerScheduleSlot] = snapshot.documents.compactMap { doc in
+        let subcollectionSlots: [TrainerScheduleSlot] = trainerScheduleSnapshot.documents.compactMap { doc in
             let data = doc.data()
 
             // Required time fields
@@ -62,20 +65,16 @@ final class FirestoreService {
                 return nil
             }
 
-            // Optional fields
-            let clientId = data["clientId"] as? String
-            let clientName = data["clientName"] as? String
-            let bookedAt = (data["bookedAt"] as? Timestamp)?.dateValue()
-            let updatedAt = (data["updatedAt"] as? Timestamp)?.dateValue()
-
-            // Status: prefer explicit value; if missing but clientId exists, infer booked; else default to open
+            // Status: if missing, default to .open. If somehow .booked, we’ll exclude below.
             let status: TrainerScheduleSlot.Status = {
                 if let raw = data["status"] as? String, let s = TrainerScheduleSlot.Status(rawValue: raw) {
                     return s
                 }
-                if clientId != nil { return .booked }
                 return .open
             }()
+
+            // If a slot remains in this subcollection but is marked booked, skip it.
+            guard status != .booked else { return nil }
 
             return TrainerScheduleSlot(
                 id: doc.documentID,
@@ -83,13 +82,69 @@ final class FirestoreService {
                 status: status,
                 startTime: startTs.dateValue(),
                 endTime: endTs.dateValue(),
-                clientId: clientId,
-                clientName: clientName,
-                bookedAt: bookedAt,
-                updatedAt: updatedAt
+                clientId: nil,
+                clientName: nil,
+                bookedAt: nil,
+                updatedAt: (data["updatedAt"] as? Timestamp)?.dateValue()
             )
         }
-        return slots
+
+        for slot in subcollectionSlots {
+            mergedById[slot.id] = slot
+        }
+
+        // --- 2) Fetch booked slots from top-level bookings collection
+        // Accept both "confirmed" and "booked" as booked states (new data uses "confirmed").
+        let bookingsSnapshot = try await db.collection("bookings")
+            .whereField("trainerId", isEqualTo: trainerId)
+            .whereField("startTime", isGreaterThanOrEqualTo: startTs)
+            .whereField("startTime", isLessThan: endTs)
+            .order(by: "startTime")
+            .getDocuments()
+
+        let bookedSlots: [TrainerScheduleSlot] = bookingsSnapshot.documents.compactMap { doc in
+            let data = doc.data()
+
+            // Only include confirmed/booked bookings
+            guard
+                let bookedStatus = data["status"] as? String,
+                bookedStatus == "confirmed" || bookedStatus == "booked",
+                let startTs = data["startTime"] as? Timestamp,
+                let endTs = data["endTime"] as? Timestamp
+            else {
+                return nil
+            }
+
+            // Prefer scheduleSlotId (often matches deterministic scheduleDocId), then slotId, then fallback to booking doc id
+            let slotIdentifier =
+                (data["scheduleSlotId"] as? String) ??
+                (data["slotId"] as? String) ??
+                doc.documentID
+
+            let clientUID = data["clientUID"] as? String
+            let clientName = data["clientName"] as? String
+
+            return TrainerScheduleSlot(
+                id: slotIdentifier,
+                trainerId: trainerId,
+                status: .booked,
+                startTime: startTs.dateValue(),
+                endTime: endTs.dateValue(),
+                clientId: clientUID,
+                clientName: clientName,
+                bookedAt: (data["bookedAt"] as? Timestamp)?.dateValue(),
+                updatedAt: (data["updatedAt"] as? Timestamp)?.dateValue()
+            )
+        }
+
+        // Overwrite any open/unavailable slot with the booked one if ids collide.
+        for slot in bookedSlots {
+            mergedById[slot.id] = slot
+        }
+
+        // Return merged list; sorting by startTime for stable presentation
+        let combined = Array(mergedById.values).sorted { $0.startTime < $1.startTime }
+        return combined
         #else
         // No Firestore in this build; return empty to keep app usable
         return []
@@ -290,4 +345,3 @@ final class FirestoreService {
         #endif
     }
 }
-
