@@ -26,7 +26,12 @@ final class ScheduleViewModel: ObservableObject {
 
     // State used by ScheduleView
     @Published var weekDays: [Date] = []
-    @Published var selectedDate: Date = Date()
+    @Published var selectedDate: Date = Date() {
+        didSet {
+            // Rebuild the visible week whenever the selected day changes
+            buildCurrentWeek(anchor: selectedDate)
+        }
+    }
     @Published var visibleHours: [Int] = Array(6...20) // 6am - 8pm
     @Published var slotsByDay: [DateOnly: [TrainerScheduleSlot]] = [:]
 
