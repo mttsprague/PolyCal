@@ -41,6 +41,7 @@
 		C320422E2E9C9C96003EF857 /* PolyCalUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PolyCalUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C32042E12E9E7AAB003EF857 /* ClientsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientsViewModel.swift; sourceTree = "<group>"; };
 		C32042E32E9E7AAD003EF857 /* ClientDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientDetailView.swift; sourceTree = "<group>"; };
+		C3BCEE552EA16203004619EF /* index.ts */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.typescript; path = index.ts; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -102,6 +103,7 @@
 				C32042162E9C9C95003EF857 /* Products */,
 				C32042E12E9E7AAB003EF857 /* ClientsViewModel.swift */,
 				C32042E32E9E7AAD003EF857 /* ClientDetailView.swift */,
+				C3BCEE552EA16203004619EF /* index.ts */,
 			);
 			sourceTree = "<group>";
 		};

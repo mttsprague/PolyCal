@@ -172,16 +172,38 @@ final class ScheduleViewModel: ObservableObject {
     }
 
     // Allows custom start/end (from the wheel editor)
+    // Updated: Splits multi-hour blocks into one-hour slots
     func setCustomSlot(on day: Date, startTime: Date, endTime: Date, status: TrainerScheduleSlot.Status) async {
         guard endTime > startTime else { return }
 
+        let calendar = Calendar.current
+        var currentSlotStart = startTime
         let trainerId = myTrainerId
-        do {
-            try await scheduleRepo.upsertSlot(trainerId: trainerId, startTime: startTime, endTime: endTime, status: status)
-            await loadWeek()
-        } catch {
-            print("Failed to upsert slot: \(error)")
+
+        while currentSlotStart < endTime {
+            guard let nextHour = calendar.date(byAdding: .hour, value: 1, to: currentSlotStart) else { break }
+
+            // For strict 1-hour "open" slots, skip partial trailing hour
+            if nextHour > endTime && status == .open {
+                break
+            }
+
+            let actualSlotEnd = min(nextHour, endTime)
+            do {
+                try await scheduleRepo.upsertSlot(
+                    trainerId: trainerId,
+                    startTime: currentSlotStart,
+                    endTime: actualSlotEnd,
+                    status: status
+                )
+            } catch {
+                print("Failed to upsert slot for \(currentSlotStart): \(error)")
+            }
+
+            currentSlotStart = nextHour
         }
+
+        await loadWeek()
     }
 
     func clearSlot(on day: Date, hour: Int) async {
@@ -203,11 +225,13 @@ final class ScheduleViewModel: ObservableObject {
         end: Date?,
         dailyStartHour: Int? = nil,
         dailyEndHour: Int? = nil,
-        slotDurationMinutes: Int? = nil
+        slotDurationMinutes: Int? = nil,
+        selectedDaysOfWeek: [Int]? = nil
     ) async {
         let fmt = DateFormatter()
         fmt.calendar = Calendar(identifier: .gregorian)
-        fmt.timeZone = TimeZone(secondsFromGMT: 0)
+        // IMPORTANT: Use LOCAL timezone for date-only strings so the server interprets them as local days.
+        fmt.timeZone = .current
         fmt.dateFormat = "yyyy-MM-dd"
 
         let startStr = start.map { fmt.string(from: $0) }
@@ -219,7 +243,8 @@ final class ScheduleViewModel: ObservableObject {
                 endDate: endStr,
                 dailyStartHour: dailyStartHour,
                 dailyEndHour: dailyEndHour,
-                slotDurationMinutes: slotDurationMinutes
+                slotDurationMinutes: slotDurationMinutes,
+                daysOfWeek: selectedDaysOfWeek
             )
             print("processTrainerAvailability: \(result.message) slotsAdded=\(result.slotsAdded ?? 0)")
             await loadWeek()
@@ -237,4 +262,3 @@ final class ScheduleViewModel: ObservableObject {
         }
     }
 }
-

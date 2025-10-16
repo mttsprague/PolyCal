@@ -11,7 +11,7 @@ struct AvailabilityEditorSheet: View {
     let defaultDay: Date
     let defaultHour: Int
     let onSaveSingle: (Date, Date, Date, TrainerScheduleSlot.Status) -> Void
-    let onSaveOngoing: (Date?, Date?, Int?, Int?, Int?) -> Void
+    let onSaveOngoing: (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -37,7 +37,7 @@ struct AvailabilityEditorSheet: View {
         defaultDay: Date,
         defaultHour: Int,
         onSaveSingle: @escaping (Date, Date, Date, TrainerScheduleSlot.Status) -> Void,
-        onSaveOngoing: @escaping (Date?, Date?, Int?, Int?, Int?) -> Void
+        onSaveOngoing: @escaping (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void
     ) {
         self.defaultDay = defaultDay
         self.defaultHour = defaultHour
@@ -223,11 +223,12 @@ struct AvailabilityEditorSheet: View {
     }
 
     private func applyRecurring() {
-        // Map to backend-supported single daily window, fixed 60-minute duration
+        // Send to Cloud Function with 60-minute duration and selected weekdays
         let startDateToUse = bulkStartDate ?? Calendar.current.startOfDay(for: defaultDay)
         let endDateToUse = recurringOngoing ? nil : bulkEndDate
+        let daysArray = selectedWeekdays.isEmpty ? nil : Array(selectedWeekdays).sorted()
 
-        onSaveOngoing(startDateToUse, endDateToUse, recurringStartHour, recurringEndHour, 60)
+        onSaveOngoing(startDateToUse, endDateToUse, recurringStartHour, recurringEndHour, 60, daysArray)
         dismiss()
     }
 
@@ -369,3 +370,4 @@ private struct OptionalDatePickerRow: View {
         }
     }
 }
+
