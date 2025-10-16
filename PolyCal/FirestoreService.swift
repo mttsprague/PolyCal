@@ -54,10 +54,8 @@ final class FirestoreService {
         let slots: [TrainerScheduleSlot] = snapshot.documents.compactMap { doc in
             let data = doc.data()
 
-            // Required fields
+            // Required time fields
             guard
-                let statusRaw = data["status"] as? String,
-                let status = TrainerScheduleSlot.Status(rawValue: statusRaw),
                 let startTs = data["startTime"] as? Timestamp,
                 let endTs = data["endTime"] as? Timestamp
             else {
@@ -69,6 +67,15 @@ final class FirestoreService {
             let clientName = data["clientName"] as? String
             let bookedAt = (data["bookedAt"] as? Timestamp)?.dateValue()
             let updatedAt = (data["updatedAt"] as? Timestamp)?.dateValue()
+
+            // Status: prefer explicit value; if missing but clientId exists, infer booked; else default to open
+            let status: TrainerScheduleSlot.Status = {
+                if let raw = data["status"] as? String, let s = TrainerScheduleSlot.Status(rawValue: raw) {
+                    return s
+                }
+                if clientId != nil { return .booked }
+                return .open
+            }()
 
             return TrainerScheduleSlot(
                 id: doc.documentID,

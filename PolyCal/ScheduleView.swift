@@ -111,14 +111,14 @@ struct ScheduleView: View {
                                                             .stroke(Color(UIColor.systemGray3), lineWidth: 0.5)
 
                                                         let key = DateOnly(day)
+                                                        let cellStart = dateBySetting(hour: hour, on: day)
+                                                        let cellEnd = Calendar.current.date(byAdding: .hour, value: 1, to: cellStart) ?? cellStart.addingTimeInterval(3600)
+
                                                         let matchingSlots: [TrainerScheduleSlot] = {
                                                             if let slots = viewModel.slotsByDay[key] {
+                                                                // Show any slot that overlaps this hour cell
                                                                 return slots.filter {
-                                                                    Calendar.current.isDate(
-                                                                        $0.startTime,
-                                                                        equalTo: dateBySetting(hour: hour, on: day),
-                                                                        toGranularity: .hour
-                                                                    )
+                                                                    $0.startTime < cellEnd && $0.endTime > cellStart
                                                                 }
                                                             }
                                                             return []
@@ -140,12 +140,10 @@ struct ScheduleView: View {
                                                     .onTapGesture {
                                                         // Only open editor if there is no event occupying this cell
                                                         let key = DateOnly(day)
+                                                        let cellStart = dateBySetting(hour: hour, on: day)
+                                                        let cellEnd = Calendar.current.date(byAdding: .hour, value: 1, to: cellStart) ?? cellStart.addingTimeInterval(3600)
                                                         let hasEvent = (viewModel.slotsByDay[key] ?? []).contains {
-                                                            Calendar.current.isDate(
-                                                                $0.startTime,
-                                                                equalTo: dateBySetting(hour: hour, on: day),
-                                                                toGranularity: .hour
-                                                            )
+                                                            $0.startTime < cellEnd && $0.endTime > cellStart
                                                         }
                                                         guard !hasEvent else { return }
                                                         editorDay = day
