@@ -463,14 +463,29 @@ private struct ClientDetailSheet: View {
                 Text(client.fullName)
                     .font(.title3.weight(.semibold))
                 if !client.emailAddress.isEmpty {
-                    Text(client.emailAddress)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    Link(destination: URL(string: "mailto:\(client.emailAddress)")!) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "envelope.fill")
+                                .font(.system(size: 12))
+                            Text(client.emailAddress)
+                                .font(.subheadline)
+                        }
+                        .foregroundStyle(AppTheme.primary)
+                    }
                 }
                 if !client.phoneNumber.isEmpty {
-                    Text(client.phoneNumber)
-                        .font(.subheadline)
+                    VStack(spacing: Spacing.xs) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "phone.fill")
+                                .font(.system(size: 12))
+                            Text(client.phoneNumber)
+                                .font(.subheadline)
+                        }
                         .foregroundStyle(.secondary)
+                        
+                        InlinePhoneActions(phoneNumber: client.phoneNumber)
+                    }
+                    .padding(.top, Spacing.xxs)
                 }
             }
 
