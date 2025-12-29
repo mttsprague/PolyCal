@@ -302,6 +302,8 @@ private struct EventCell: View {
 final class AllTrainersDayViewModel: ObservableObject {
     @Published var trainers: [Trainer] = []
     @Published var slotsByTrainer: [String: [TrainerScheduleSlot]] = [:]
+    @Published var currentDay: Date = Date()
+
     private let scheduleRepo = ScheduleRepository()
 
     func loadInitial(selectedDate: Date) async {
@@ -318,6 +320,8 @@ final class AllTrainersDayViewModel: ObservableObject {
     }
 
     func reload(for day: Date) async {
+        currentDay = day
+
         let cal = Calendar.current
         let startOfDay = cal.startOfDay(for: day)
         let endOfDay = cal.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay.addingTimeInterval(86400)
@@ -339,11 +343,14 @@ final class AllTrainersDayViewModel: ObservableObject {
     func slotFor(trainerId: String, atHour hour: Int) -> TrainerScheduleSlot? {
         guard let slots = slotsByTrainer[trainerId] else { return nil }
         let cal = Calendar.current
+        guard
+            let cellStart = cal.date(bySettingHour: hour, minute: 0, second: 0, of: currentDay),
+            let cellEnd = cal.date(byAdding: .hour, value: 1, to: cellStart)
+        else { return nil }
+
+        // Return any slot that overlaps the hour cell (on-the-hour bookings will match exactly)
         return slots.first(where: { slot in
-            if let startHour = cal.dateComponents([.hour], from: slot.startTime).hour {
-                return startHour == hour
-            }
-            return false
+            slot.startTime < cellEnd && slot.endTime > cellStart
         })
     }
 }
@@ -352,3 +359,4 @@ final class AllTrainersDayViewModel: ObservableObject {
     AllTrainersDayView(scheduleViewModel: ScheduleViewModel())
         .environmentObject(AuthManager())
 }
+

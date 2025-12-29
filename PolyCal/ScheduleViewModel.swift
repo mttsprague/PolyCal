@@ -26,9 +26,17 @@ final class ScheduleViewModel: ObservableObject {
 
     // State used by ScheduleView
     @Published var weekDays: [Date] = []
-    @Published var selectedDate: Date = Date()
+    @Published var selectedDate: Date = Date() {
+        didSet {
+            // Rebuild the visible week whenever the selected day changes
+            buildCurrentWeek(anchor: selectedDate)
+        }
+    }
     @Published var visibleHours: [Int] = Array(6...20) // 6am - 8pm
     @Published var slotsByDay: [DateOnly: [TrainerScheduleSlot]] = [:]
+
+    // Client cache for instant presentation
+    @Published var clientsById: [String: Client] = [:]
 
     private let scheduleRepo = ScheduleRepository()
 
@@ -115,8 +123,43 @@ final class ScheduleViewModel: ObservableObject {
                 grouped[key]?.sort { $0.startTime < $1.startTime }
             }
             self.slotsByDay = grouped
+
+            // Prefetch clients for all booked slots in this week
+            await prefetchClientsForVisibleWeek()
         } catch {
             self.slotsByDay = [:]
+        }
+    }
+
+    // MARK: - Prefetch clients for instant sheet presentation
+    func prefetchClientsForVisibleWeek() async {
+        // Collect unique client IDs from booked slots
+        let allIds = Set(slotsByDay.values.flatMap { daySlots in
+            daySlots.compactMap { $0.isBooked ? $0.clientId : nil }
+        })
+        // Skip any already cached
+        let missing = allIds.subtracting(clientsById.keys)
+        guard !missing.isEmpty else { return }
+
+        // Fetch concurrently off the main actor
+        var fetched: [String: Client] = [:]
+        await withTaskGroup(of: (String, Client?).self) { group in
+            for id in missing {
+                group.addTask {
+                    let client = try? await FirestoreService.shared.fetchClient(by: id)
+                    return (id, client)
+                }
+            }
+            for await (id, client) in group {
+                if let client {
+                    fetched[id] = client
+                }
+            }
+        }
+
+        // Merge into cache
+        for (id, client) in fetched {
+            clientsById[id] = client
         }
     }
 
@@ -129,16 +172,38 @@ final class ScheduleViewModel: ObservableObject {
     }
 
     // Allows custom start/end (from the wheel editor)
+    // Updated: Splits multi-hour blocks into one-hour slots
     func setCustomSlot(on day: Date, startTime: Date, endTime: Date, status: TrainerScheduleSlot.Status) async {
         guard endTime > startTime else { return }
 
+        let calendar = Calendar.current
+        var currentSlotStart = startTime
         let trainerId = myTrainerId
-        do {
-            try await scheduleRepo.upsertSlot(trainerId: trainerId, startTime: startTime, endTime: endTime, status: status)
-            await loadWeek()
-        } catch {
-            print("Failed to upsert slot: \(error)")
+
+        while currentSlotStart < endTime {
+            guard let nextHour = calendar.date(byAdding: .hour, value: 1, to: currentSlotStart) else { break }
+
+            // For strict 1-hour "open" slots, skip partial trailing hour
+            if nextHour > endTime && status == .open {
+                break
+            }
+
+            let actualSlotEnd = min(nextHour, endTime)
+            do {
+                try await scheduleRepo.upsertSlot(
+                    trainerId: trainerId,
+                    startTime: currentSlotStart,
+                    endTime: actualSlotEnd,
+                    status: status
+                )
+            } catch {
+                print("Failed to upsert slot for \(currentSlotStart): \(error)")
+            }
+
+            currentSlotStart = nextHour
         }
+
+        await loadWeek()
     }
 
     func clearSlot(on day: Date, hour: Int) async {
@@ -160,11 +225,13 @@ final class ScheduleViewModel: ObservableObject {
         end: Date?,
         dailyStartHour: Int? = nil,
         dailyEndHour: Int? = nil,
-        slotDurationMinutes: Int? = nil
+        slotDurationMinutes: Int? = nil,
+        selectedDaysOfWeek: [Int]? = nil
     ) async {
         let fmt = DateFormatter()
         fmt.calendar = Calendar(identifier: .gregorian)
-        fmt.timeZone = TimeZone(secondsFromGMT: 0)
+        // IMPORTANT: Use LOCAL timezone for date-only strings so the server interprets them as local days.
+        fmt.timeZone = .current
         fmt.dateFormat = "yyyy-MM-dd"
 
         let startStr = start.map { fmt.string(from: $0) }
@@ -176,7 +243,8 @@ final class ScheduleViewModel: ObservableObject {
                 endDate: endStr,
                 dailyStartHour: dailyStartHour,
                 dailyEndHour: dailyEndHour,
-                slotDurationMinutes: slotDurationMinutes
+                slotDurationMinutes: slotDurationMinutes,
+                daysOfWeek: selectedDaysOfWeek
             )
             print("processTrainerAvailability: \(result.message) slotsAdded=\(result.slotsAdded ?? 0)")
             await loadWeek()

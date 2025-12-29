@@ -11,10 +11,13 @@ struct ScheduleView: View {
     @EnvironmentObject private var auth: AuthManager
     @StateObject private var viewModel = ScheduleViewModel()
 
-    // Editor presentation state
-    @State private var editorShown = false
-    @State private var editorDay: Date = Date()
-    @State private var editorHour: Int = 9
+    // Editor presentation state driven by an Identifiable item
+    private struct EditorContext: Identifiable, Equatable {
+        let id = UUID()
+        let day: Date
+        let hour: Int
+    }
+    @State private var editorContext: EditorContext?
 
     // Options menu
     @State private var showOptions = false
@@ -28,23 +31,18 @@ struct ScheduleView: View {
     @State private var clientSheetShown = false
 
     // Layout constants
-    private let rowHeight: CGFloat = 32               // skinny rows
-    private let rowVerticalPadding: CGFloat = 6       // tighter spacing between rows
-    private let timeColWidth: CGFloat = 56            // fixed left column width
-    private let dayColumnWidth: CGFloat = 160         // width per day column (scrollable horizontally)
-    private let columnSpacing: CGFloat = 0            // spacing between day columns
-    private let gridHeaderVPad: CGFloat = 6           // compact vertical padding for day header
-
-    // Shared horizontal scroll position for header + grid
-    @State private var hScrollOffset: CGFloat = 0
+    private let rowHeight: CGFloat = 32
+    private let rowVerticalPadding: CGFloat = 6
+    private let timeColWidth: CGFloat = 56
+    private let dayColumnWidth: CGFloat = 160
+    private let columnSpacing: CGFloat = 0
+    private let gridHeaderVPad: CGFloat = 6
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Header avatar + name (tappable)
                 header
 
-                // Week strip with chevrons and evenly spaced day bubbles
                 WeekStrip(
                     title: viewModel.weekTitle,
                     weekDays: viewModel.weekDays,
@@ -53,18 +51,14 @@ struct ScheduleView: View {
                     onNextWeek: { shiftWeek(by: 1) }
                 )
                 .padding(.top, 2)
-                .padding(.bottom, 4) // tighter
+                .padding(.bottom, 4)
 
-                // MARK: Grid (fixed time column + horizontally scrolling days, single vertical scroll)
-                let headerRowHeight = 28.0 // height of the day header stack (approx)
+                let headerRowHeight = 28.0
 
                 ZStack(alignment: .topLeading) {
-                    // Vertical content: time column + grid (no day header inside; we overlay it frozen)
                     ScrollView(.vertical, showsIndicators: true) {
                         HStack(spacing: 0) {
-                            // Fixed left time column (does not scroll horizontally)
                             VStack(spacing: 0) {
-                                // Spacer to align under the frozen day header height
                                 Color.clear
                                     .frame(height: headerRowHeight + gridHeaderVPad * 2)
 
@@ -82,10 +76,25 @@ struct ScheduleView: View {
                             .frame(width: timeColWidth)
                             .background(Color(UIColor.systemGray6))
 
-                            // Right side: horizontally scrolling GRID only (header is overlaid above)
-                            SynchronizedHScrollView(contentOffsetX: $hScrollOffset) {
+                            ScrollView(.horizontal, showsIndicators: true) {
                                 VStack(spacing: 0) {
-                                    // Grid rows (scroll horizontally)
+                                    HStack(spacing: columnSpacing) {
+                                        ForEach(viewModel.weekDays, id: \.self) { day in
+                                            VStack(spacing: 2) {
+                                                Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
+                                                    .font(.caption2.weight(.semibold))
+                                                    .foregroundStyle(.secondary)
+                                                Text(day, format: .dateTime.month(.abbreviated).day())
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            .frame(width: dayColumnWidth)
+                                        }
+                                    }
+                                    .padding(.vertical, gridHeaderVPad)
+                                    .padding(.leading, 6)
+                                    .padding(.trailing, 8)
+
                                     VStack(spacing: 0) {
                                         ForEach(viewModel.visibleHours, id: \.self) { hour in
                                             HStack(spacing: columnSpacing) {
@@ -97,20 +106,18 @@ struct ScheduleView: View {
                                                             .stroke(Color(UIColor.systemGray3), lineWidth: 0.5)
 
                                                         let key = DateOnly(day)
+                                                        let cellStart = dateBySetting(hour: hour, on: day)
+                                                        let cellEnd = Calendar.current.date(byAdding: .hour, value: 1, to: cellStart) ?? cellStart.addingTimeInterval(3600)
+
                                                         let matchingSlots: [TrainerScheduleSlot] = {
                                                             if let slots = viewModel.slotsByDay[key] {
                                                                 return slots.filter {
-                                                                    Calendar.current.isDate(
-                                                                        $0.startTime,
-                                                                        equalTo: dateBySetting(hour: hour, on: day),
-                                                                        toGranularity: .hour
-                                                                    )
+                                                                    $0.startTime < cellEnd && $0.endTime > cellStart
                                                                 }
                                                             }
                                                             return []
                                                         }()
 
-                                                        // Render events (if any)
                                                         ForEach(matchingSlots) { slot in
                                                             EventCell(slot: slot)
                                                                 .padding(8)
@@ -124,19 +131,15 @@ struct ScheduleView: View {
                                                     .padding(.horizontal, 6)
                                                     .contentShape(Rectangle())
                                                     .onTapGesture {
-                                                        // Only open editor if there is no event occupying this cell
                                                         let key = DateOnly(day)
+                                                        let cellStart = dateBySetting(hour: hour, on: day)
+                                                        let cellEnd = Calendar.current.date(byAdding: .hour, value: 1, to: cellStart) ?? cellStart.addingTimeInterval(3600)
                                                         let hasEvent = (viewModel.slotsByDay[key] ?? []).contains {
-                                                            Calendar.current.isDate(
-                                                                $0.startTime,
-                                                                equalTo: dateBySetting(hour: hour, on: day),
-                                                                toGranularity: .hour
-                                                            )
+                                                            $0.startTime < cellEnd && $0.endTime > cellStart
                                                         }
                                                         guard !hasEvent else { return }
-                                                        editorDay = day
-                                                        editorHour = hour
-                                                        editorShown = true
+                                                        // Drive the sheet with an Identifiable item so init sees the correct values
+                                                        editorContext = EditorContext(day: day, hour: hour)
                                                     }
                                                     .contextMenu {
                                                         Button {
@@ -163,50 +166,25 @@ struct ScheduleView: View {
                                     }
                                     .padding(.bottom, 8)
                                 }
-                                .padding(.leading, 6)    // match header’s leading padding
-                                .padding(.trailing, 8)   // match header’s trailing padding
                             }
                         }
                         .background(Color(UIColor.systemGray6))
                     }
 
-                    // Frozen day header row: horizontally scrolls in sync with grid, stays visible on vertical scroll
-                    VStack(spacing: 0) {
-                        SynchronizedHScrollView(contentOffsetX: $hScrollOffset) {
-                            HStack(spacing: columnSpacing) {
-                                ForEach(viewModel.weekDays, id: \.self) { day in
-                                    VStack(spacing: 2) {
-                                        Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                                            .font(.caption2.weight(.semibold))
-                                            .foregroundStyle(.secondary)
-                                        Text(day, format: .dateTime.month(.abbreviated).day())
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .frame(width: dayColumnWidth)
-                                }
-                            }
-                            .padding(.leading, 6)
-                            .padding(.trailing, 8)
-                            .padding(.vertical, gridHeaderVPad)
-                        }
-                        .background(Color(UIColor.systemGray6))
-                        .overlay(
+                    TimelineView(.everyMinute) { context in
+                        if let y = currentTimeYOffset(for: context.date,
+                                                      firstHour: viewModel.visibleHours.first,
+                                                      rowHeight: rowHeight,
+                                                      rowVerticalPadding: rowVerticalPadding) {
                             Rectangle()
-                                .fill(Color(UIColor.systemGray3))
-                                .frame(height: 0.5)
-                                .frame(maxWidth: .infinity)
-                                .alignmentGuide(.top) { d in d[.top] }
-                            , alignment: .bottom
-                        )
-
-                        // Thin divider between header and grid
-                        Color.clear.frame(height: 0) // placeholder if needed
+                                .fill(Color.red)
+                                .frame(height: 2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .offset(x: 0, y: (headerRowHeight + gridHeaderVPad * 2) + y)
+                                .accessibilityHidden(true)
+                        }
                     }
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .offset(x: timeColWidth) // position over the grid area (to the right of time column)
                 }
-
             }
             .navigationBarHidden(true)
             .task {
@@ -225,26 +203,29 @@ struct ScheduleView: View {
             .onChange(of: viewModel.selectedDate) { _, _ in
                 Task { await viewModel.loadWeek() }
             }
-            .sheet(isPresented: $editorShown) {
+            .sheet(item: $editorContext, onDismiss: {
+                editorContext = nil
+            }) { ctx in
                 AvailabilityEditorSheet(
-                    defaultDay: editorDay,
-                    defaultHour: editorHour,
+                    defaultDay: ctx.day,
+                    defaultHour: ctx.hour,
                     onSaveSingle: { day, start, end, status in
                         Task {
                             await viewModel.setCustomSlot(on: day, startTime: start, endTime: end, status: status)
-                            editorShown = false
+                            editorContext = nil
                         }
                     },
-                    onSaveOngoing: { startDate, endDate, dailyStartHour, dailyEndHour, durationMinutes in
+                    onSaveOngoing: { startDate, endDate, dailyStartHour, dailyEndHour, durationMinutes, daysOfWeek in
                         Task {
                             await viewModel.openAvailability(
                                 start: startDate,
                                 end: endDate,
                                 dailyStartHour: dailyStartHour,
                                 dailyEndHour: dailyEndHour,
-                                slotDurationMinutes: durationMinutes
+                                slotDurationMinutes: durationMinutes,
+                                selectedDaysOfWeek: daysOfWeek
                             )
-                            editorShown = false
+                            editorContext = nil
                         }
                     }
                 )
@@ -285,7 +266,6 @@ struct ScheduleView: View {
                     ClientDetailSheet(client: client)
                         .presentationDetents([.medium, .large])
                 } else {
-                    // This should rarely show now; we present after data arrives.
                     ProgressView("Loading…")
                         .padding()
                 }
@@ -365,7 +345,7 @@ struct ScheduleView: View {
         }
     }
 
-    // MARK: - Helpers
+    // Helpers
 
     private func hourLabel(_ hour: Int) -> String {
         let comps = DateComponents(calendar: Calendar.current, hour: hour)
@@ -391,24 +371,33 @@ struct ScheduleView: View {
     }
 
     private func handleSlotTap(_ slot: TrainerScheduleSlot, defaultDay: Date, defaultHour: Int) {
-        // If booked, show client info; else fall back to opening editor
         if slot.isBooked, let clientId = slot.clientId {
+            if let cached = viewModel.clientsById[clientId] {
+                self.selectedClient = cached
+            } else {
+                self.selectedClient = Client(
+                    id: clientId,
+                    firstName: slot.clientName ?? "Booked",
+                    lastName: "",
+                    emailAddress: "",
+                    phoneNumber: "",
+                    photoURL: nil
+                )
+            }
+            self.clientSheetShown = true
+
             Task {
                 let fetched = try? await FirestoreService.shared.fetchClient(by: clientId)
                 await MainActor.run {
-                    // Always set a non-nil model before presenting
                     if let client = fetched {
                         self.selectedClient = client
-                    } else {
-                        self.selectedClient = Client(id: clientId, firstName: slot.clientName ?? "Booked", lastName: "", emailAddress: "", phoneNumber: "", photoURL: nil)
+                        viewModel.clientsById[clientId] = client
                     }
-                    self.clientSheetShown = true
                 }
             }
         } else {
-            editorDay = defaultDay
-            editorHour = defaultHour
-            editorShown = true
+            // Drive the sheet with an Identifiable item so init sees the correct values
+            editorContext = EditorContext(day: defaultDay, hour: defaultHour)
         }
     }
 }
@@ -444,23 +433,23 @@ private struct ClientDetailSheet: View {
             if let urlString = client.photoURL, let url = URL(string: urlString) {
                 AsyncImage(url: url) { phase in
                     switch phase {
-                    case .empty:
-                        Circle().fill(Color.gray.opacity(0.2))
-                            .frame(width: 72, height: 72)
-                            .overlay(ProgressView())
                     case .success(let image):
                         image
                             .resizable()
                             .scaledToFill()
                             .frame(width: 72, height: 72)
                             .clipShape(Circle())
-                    case .failure:
-                        Circle().fill(Color.gray.opacity(0.2))
+                            .transition(.opacity)
+                    case .empty, .failure:
+                        Circle()
+                            .fill(Color.gray.opacity(0.2))
                             .frame(width: 72, height: 72)
                             .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
                     @unknown default:
-                        Circle().fill(Color.gray.opacity(0.2))
+                        Circle()
+                            .fill(Color.gray.opacity(0.2))
                             .frame(width: 72, height: 72)
+                            .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
                     }
                 }
             } else {
@@ -491,80 +480,3 @@ private struct ClientDetailSheet: View {
         .presentationDragIndicator(.visible)
     }
 }
-
-// MARK: - Helper: Synchronized horizontal scroll view using UIScrollView
-
-private struct SynchronizedHScrollView<Content: View>: UIViewRepresentable {
-    @Binding var contentOffsetX: CGFloat
-    var showsIndicators: Bool = true
-    let content: Content
-
-    init(contentOffsetX: Binding<CGFloat>, showsIndicators: Bool = true, @ViewBuilder content: () -> Content) {
-        self._contentOffsetX = contentOffsetX
-        self.showsIndicators = showsIndicators
-        self.content = content()
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    func makeUIView(context: Context) -> UIScrollView {
-        let scrollView = UIScrollView()
-        scrollView.showsHorizontalScrollIndicator = showsIndicators
-        scrollView.showsVerticalScrollIndicator = false
-        scrollView.alwaysBounceHorizontal = true
-        scrollView.alwaysBounceVertical = false
-        scrollView.isPagingEnabled = false
-        scrollView.delegate = context.coordinator
-
-        // Host SwiftUI content
-        let hosting = UIHostingController(rootView: content)
-        hosting.view.translatesAutoresizingMaskIntoConstraints = false
-        hosting.view.backgroundColor = .clear
-
-        scrollView.addSubview(hosting.view)
-
-        // Constrain hosting view to scroll view's content layout
-        NSLayoutConstraint.activate([
-            hosting.view.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            hosting.view.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-            hosting.view.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
-            hosting.view.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-
-            // Height matches scroll view (no vertical scrolling)
-            hosting.view.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor)
-        ])
-
-        context.coordinator.hostingController = hosting
-        return scrollView
-    }
-
-    func updateUIView(_ scrollView: UIScrollView, context: Context) {
-        // Update hosted content
-        context.coordinator.hostingController?.rootView = content
-
-        // If binding changed externally, update scroll position (without feedback loop)
-        if abs(scrollView.contentOffset.x - contentOffsetX) > 0.5 {
-            scrollView.setContentOffset(CGPoint(x: contentOffsetX, y: 0), animated: false)
-        }
-    }
-
-    class Coordinator: NSObject, UIScrollViewDelegate {
-        var parent: SynchronizedHScrollView
-        weak var hostingController: UIHostingController<Content>?
-
-        init(_ parent: SynchronizedHScrollView) {
-            self.parent = parent
-        }
-
-        func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            // Propagate horizontal offset back to SwiftUI
-            let newX = scrollView.contentOffset.x
-            if abs(parent.contentOffsetX - newX) > 0.5 {
-                parent.contentOffsetX = newX
-            }
-        }
-    }
-}
-

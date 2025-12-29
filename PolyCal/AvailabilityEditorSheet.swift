@@ -11,13 +11,14 @@ struct AvailabilityEditorSheet: View {
     let defaultDay: Date
     let defaultHour: Int
     let onSaveSingle: (Date, Date, Date, TrainerScheduleSlot.Status) -> Void
-    let onSaveOngoing: (Date?, Date?, Int?, Int?, Int?) -> Void
+    let onSaveOngoing: (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
-    // Single-slot state (hour-only; end is always start + 1 hour)
+    // Single-slot state
     @State private var singleDay: Date
-    @State private var singleStartHour: Int
+    @State private var singleStart: Date
+    @State private var singleEnd: Date
     @State private var singleStatus: TrainerScheduleSlot.Status = .open
 
     // Recurring toggle and inputs
@@ -36,15 +37,20 @@ struct AvailabilityEditorSheet: View {
         defaultDay: Date,
         defaultHour: Int,
         onSaveSingle: @escaping (Date, Date, Date, TrainerScheduleSlot.Status) -> Void,
-        onSaveOngoing: @escaping (Date?, Date?, Int?, Int?, Int?) -> Void
+        onSaveOngoing: @escaping (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void
     ) {
         self.defaultDay = defaultDay
         self.defaultHour = defaultHour
         self.onSaveSingle = onSaveSingle
         self.onSaveOngoing = onSaveOngoing
 
+        // Initialize state with provided defaults
+        let cal = Calendar.current
         _singleDay = State(initialValue: defaultDay)
-        _singleStartHour = State(initialValue: defaultHour)
+        let start = cal.date(bySettingHour: defaultHour, minute: 0, second: 0, of: defaultDay) ?? defaultDay
+        let end = cal.date(byAdding: .hour, value: 1, to: start) ?? start.addingTimeInterval(3600)
+        _singleStart = State(initialValue: start)
+        _singleEnd = State(initialValue: end)
 
         _recurringStartHour = State(initialValue: defaultHour)
         _recurringEndHour = State(initialValue: min(defaultHour + 1, 23))
@@ -60,7 +66,7 @@ struct AvailabilityEditorSheet: View {
                 }
                 .pickerStyle(.segmented)
 
-                // Single-slot editor (hour-only)
+                // Single-slot editor
                 singleSection
 
                 // Recurring editor (toggle on/off, then show details)
@@ -74,7 +80,12 @@ struct AvailabilityEditorSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { saveSingle() }
+                        .disabled(singleSaveDisabled)
                 }
+            }
+            // Ensure initial values obey the rules on first appearance
+            .onAppear {
+                snapAndSyncTimes()
             }
         }
     }
@@ -82,17 +93,27 @@ struct AvailabilityEditorSheet: View {
     private var singleSection: some View {
         Section("Single Slot") {
             DatePicker("Day", selection: $singleDay, displayedComponents: .date)
+                .onChange(of: singleDay) { _, _ in
+                    // Re-anchor both times to selected day, keep on-the-hour and end >= start + 1h
+                    snapAndSyncTimes(anchorToDay: true)
+                }
 
-            HourPickerRow(title: "Start Hour", hour: $singleStartHour)
+            // Start time: editable, snaps to the hour; end is kept >= start + 1 hour
+            DatePicker("Start", selection: $singleStart, displayedComponents: .hourAndMinute)
+                .onChange(of: singleStart) { _, _ in
+                    snapAndSyncTimes()
+                }
 
-            HStack {
-                Text("End")
-                Spacer()
-                Text(hourLabel((singleStartHour + 1) % 24))
-                    .foregroundStyle(.secondary)
+            // End time: editable, snaps to the hour; must be >= start + 1 hour
+            DatePicker(
+                "End",
+                selection: $singleEnd,
+                in: (Calendar.current.date(byAdding: .hour, value: 1, to: singleStart) ?? singleStart.addingTimeInterval(3600))...,
+                displayedComponents: .hourAndMinute
+            )
+            .onChange(of: singleEnd) { _, _ in
+                snapAndSyncTimes()
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("End hour \(hourLabel((singleStartHour + 1) % 24))")
         }
     }
 
@@ -115,7 +136,7 @@ struct AvailabilityEditorSheet: View {
                         )
                         .frame(maxWidth: .infinity, alignment: .center)
 
-                        // Common daily window
+                        // Common daily window (hour precision)
                         HourPickerRow(title: "Daily Start", hour: $recurringStartHour)
                         HourPickerRow(title: "Daily End", hour: $recurringEndHour)
                             .onChange(of: recurringEndHour) { _, newValue in
@@ -175,10 +196,17 @@ struct AvailabilityEditorSheet: View {
         }
     }
 
+    private var singleSaveDisabled: Bool {
+        singleEnd <= singleStart
+    }
+
     private var recurringDisabled: Bool {
         guard recurringEnabled else { return false }
+        // Need at least one day selected
         if selectedWeekdays.isEmpty { return true }
+        // Validate daily window
         if recurringEndHour <= recurringStartHour { return true }
+        // Validate date range
         let start = bulkStartDate ?? Calendar.current.startOfDay(for: defaultDay)
         if let end = bulkEndDate, end < start { return true }
         return false
@@ -186,25 +214,58 @@ struct AvailabilityEditorSheet: View {
 
     private func saveSingle() {
         let cal = Calendar.current
-        let start = cal.date(bySettingHour: singleStartHour, minute: 0, second: 0, of: singleDay) ?? singleDay
-        let end = cal.date(byAdding: .hour, value: 1, to: start) ?? start.addingTimeInterval(3600)
-        onSaveSingle(singleDay, start, end, singleStatus)
+        let startOnDay = roundDownToHour(anchor(time: singleStart, toDay: singleDay, calendar: cal), calendar: cal)
+        let minEnd = cal.date(byAdding: .hour, value: 1, to: startOnDay) ?? startOnDay.addingTimeInterval(3600)
+        var endOnDay = roundDownToHour(anchor(time: singleEnd, toDay: singleDay, calendar: cal), calendar: cal)
+        if endOnDay < minEnd { endOnDay = minEnd }
+        onSaveSingle(singleDay, startOnDay, endOnDay, singleStatus)
         dismiss()
     }
 
     private func applyRecurring() {
-        // Map to backend-supported single daily window, fixed 60-minute duration
+        // Send to Cloud Function with 60-minute duration and selected weekdays
         let startDateToUse = bulkStartDate ?? Calendar.current.startOfDay(for: defaultDay)
         let endDateToUse = recurringOngoing ? nil : bulkEndDate
+        let daysArray = selectedWeekdays.isEmpty ? nil : Array(selectedWeekdays).sorted()
 
-        onSaveOngoing(startDateToUse, endDateToUse, recurringStartHour, recurringEndHour, 60)
+        onSaveOngoing(startDateToUse, endDateToUse, recurringStartHour, recurringEndHour, 60, daysArray)
         dismiss()
     }
 
-    private func hourLabel(_ hour: Int) -> String {
-        let comps = DateComponents(calendar: Calendar.current, hour: hour)
-        let date = comps.date ?? Date()
-        return date.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)))
+    // MARK: - Helpers
+
+    private func snapAndSyncTimes(anchorToDay: Bool = false) {
+        let cal = Calendar.current
+
+        // Optionally re-anchor both to the selected day
+        if anchorToDay {
+            singleStart = anchor(time: singleStart, toDay: singleDay, calendar: cal)
+            singleEnd = anchor(time: singleEnd, toDay: singleDay, calendar: cal)
+        }
+
+        // Snap both to the hour
+        singleStart = roundDownToHour(singleStart, calendar: cal)
+        singleEnd = roundDownToHour(singleEnd, calendar: cal)
+
+        // Ensure end >= start + 1 hour
+        let minEnd = cal.date(byAdding: .hour, value: 1, to: singleStart) ?? singleStart.addingTimeInterval(3600)
+        if singleEnd < minEnd {
+            singleEnd = minEnd
+        }
+    }
+
+    private func anchor(time: Date, toDay day: Date, calendar cal: Calendar) -> Date {
+        let t = cal.dateComponents([.hour, .minute, .second], from: time)
+        var d = cal.dateComponents([.year, .month, .day], from: day)
+        d.hour = t.hour
+        d.minute = t.minute
+        d.second = t.second
+        return cal.date(from: d) ?? day
+    }
+
+    private func roundDownToHour(_ date: Date, calendar cal: Calendar) -> Date {
+        let comps = cal.dateComponents([.year, .month, .day, .hour], from: date)
+        return cal.date(from: comps) ?? date
     }
 }
 
@@ -269,6 +330,44 @@ private struct HourPickerRow: View {
         let comps = DateComponents(calendar: Calendar.current, hour: hour)
         let date = comps.date ?? Date()
         return date.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)))
+    }
+}
+
+private struct OptionalDatePickerRow: View {
+    let title: String
+    @Binding var date: Date?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: Binding(
+                get: { date != nil },
+                set: { newValue in
+                    if newValue {
+                        if date == nil {
+                            date = Calendar.current.startOfDay(for: Date())
+                        }
+                    } else {
+                        date = nil
+                    }
+                }
+            )) {
+                Text(title)
+            }
+
+            if let current = date {
+                DatePicker(
+                    "",
+                    selection: Binding<Date>(
+                        get: { current },
+                        set: { newValue in date = newValue }
+                    ),
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.compact)
+                .labelsHidden()
+                .padding(.leading, 32)
+            }
+        }
     }
 }
 

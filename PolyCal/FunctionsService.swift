@@ -88,17 +88,39 @@ final class FunctionsService {
         endDate: String? = nil,
         dailyStartHour: Int? = nil,
         dailyEndHour: Int? = nil,
-        slotDurationMinutes: Int? = nil
+        slotDurationMinutes: Int? = nil,
+        daysOfWeek: [Int]? = nil
     ) async throws -> ProcessAvailabilityResult {
         #if canImport(FirebaseFunctions)
         guard Auth.auth().currentUser != nil else { throw FunctionsServiceError.unauthenticated }
 
-        var payload: [String: Any] = [:]
+        // Compute timezoneOffsetMinutes with JavaScript semantics (minutes to add to LOCAL to get UTC, positive west of UTC).
+        // Use the start date's local offset if provided, so DST is respected for the intended range.
+        let tzMinutes: Int = {
+            if let startDate {
+                // Parse the local date-only string "yyyy-MM-dd" in the user's current timezone
+                var comps = DateComponents()
+                let parts = startDate.split(separator: "-").map(String.init)
+                if parts.count == 3, let y = Int(parts[0]), let m = Int(parts[1]), let d = Int(parts[2]) {
+                    comps.year = y; comps.month = m; comps.day = d
+                    if let localMidnight = Calendar.current.date(from: comps) {
+                        return -(TimeZone.current.secondsFromGMT(for: localMidnight) / 60)
+                    }
+                }
+            }
+            // Fallback: current offset
+            return -(TimeZone.current.secondsFromGMT() / 60)
+        }()
+
+        var payload: [String: Any] = [
+            "timezoneOffsetMinutes": tzMinutes
+        ]
         if let startDate { payload["startDate"] = startDate }
         if let endDate { payload["endDate"] = endDate }
         if let dailyStartHour { payload["dailyStartHour"] = dailyStartHour }
         if let dailyEndHour { payload["dailyEndHour"] = dailyEndHour }
         if let slotDurationMinutes { payload["slotDurationMinutes"] = slotDurationMinutes }
+        if let daysOfWeek { payload["daysOfWeek"] = daysOfWeek }
 
         do {
             let result = try await functions.httpsCallable("processTrainerAvailability").call(payload)
