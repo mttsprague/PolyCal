@@ -48,9 +48,12 @@ export const createPaymentIntent = functions.https.onCall(
     }
 
     const validPackages: { [key: string]: number } = {
-      single: 5000,
-      five_pack: 22500,
-      ten_pack: 40000,
+      single: 8000, // $80
+      five_pack: 37500, // $375
+      ten_pack: 70000, // $700
+      two_athlete: 14000, // $140
+      three_athlete: 18000, // $180
+      class_registration: 4500, // $45
     };
 
     if (!validPackages[packageType] || validPackages[packageType] !== amount) {
@@ -123,6 +126,9 @@ export const confirmPaymentAndCreatePackage = functions.https.onCall(
         single: 1,
         five_pack: 5,
         ten_pack: 10,
+        two_athlete: 1,
+        three_athlete: 1,
+        class_registration: 0, // Classes don't create lesson packages
       };
 
       const totalLessons = lessonCounts[packageType];
