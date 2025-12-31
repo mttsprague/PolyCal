@@ -41,6 +41,14 @@ interface BookLessonData {
 }
 
 /**
+ * Interface for the input data to the registerForClass callable function.
+ */
+interface RegisterForClassData {
+  classId: string;
+  classPassPackageId: string;
+}
+
+/**
  * Interface for the input data to the processTrainerAvailability
  * callable function.
  */
@@ -205,6 +213,154 @@ export const bookLesson = functions.https.onCall(
       throw new functions.https.HttpsError(
         "internal",
         "An unexpected error occurred while booking the lesson.",
+        (error as Error).message
+      );
+    }
+  }
+);
+
+/**
+ * Cloud Function to register for a class using a class pass.
+ */
+export const registerForClass = functions.https.onCall(
+  async (request: functions.https.CallableRequest<RegisterForClassData>) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "The function must be called while authenticated."
+      );
+    }
+    const userId = request.auth.uid;
+
+    const {classId, classPassPackageId} = request.data;
+    if (!classId || !classPassPackageId) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Missing classId or classPassPackageId in request data."
+      );
+    }
+
+    const userRef = db.collection("users").doc(userId);
+    const classPassRef = userRef
+      .collection("lessonPackages")
+      .doc(classPassPackageId);
+    const classRef = db.collection("classes").doc(classId);
+
+    try {
+      await db.runTransaction(async (transaction) => {
+        const userDoc = await transaction.get(userRef);
+        const classPassDoc = await transaction.get(classPassRef);
+        const classDoc = await transaction.get(classRef);
+
+        if (!userDoc.exists) {
+          throw new functions.https.HttpsError(
+            "not-found",
+            "User profile not found for the authenticated user."
+          );
+        }
+        if (!classPassDoc.exists) {
+          throw new functions.https.HttpsError(
+            "not-found",
+            "Specified class pass not found."
+          );
+        }
+        if (!classDoc.exists) {
+          throw new functions.https.HttpsError(
+            "not-found",
+            "Class not found."
+          );
+        }
+
+        const userData = userDoc.data();
+        const classPassData = classPassDoc.data();
+        const classData = classDoc.data();
+
+        if (!userData || !classPassData || !classData) {
+          throw new functions.https.HttpsError(
+            "internal",
+            "Unexpected missing document data."
+          );
+        }
+
+        // Verify it's a class pass
+        if (classPassData.packageType !== "class_pass") {
+          throw new functions.https.HttpsError(
+            "invalid-argument",
+            "The specified package is not a class pass."
+          );
+        }
+
+        // Check if pass has been used
+        if (classPassData.lessonsUsed >= classPassData.totalLessons) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Class pass has already been used."
+          );
+        }
+
+        // Check if pass is expired
+        if (
+          classPassData.expirationDate &&
+          classPassData.expirationDate.toDate() < new Date()
+        ) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Class pass has expired and cannot be used."
+          );
+        }
+
+        // Check if class is full
+        if (classData.currentParticipants >= classData.maxParticipants) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Class is full."
+          );
+        }
+
+        // Check if user is already registered
+        const participantRef = classRef
+          .collection("participants")
+          .doc(userId);
+        const participantDoc = await transaction.get(participantRef);
+        if (participantDoc.exists) {
+          throw new functions.https.HttpsError(
+            "already-exists",
+            "You are already registered for this class."
+          );
+        }
+
+        // Increment lessonsUsed on the class pass
+        transaction.update(classPassRef, {
+          lessonsUsed: admin.firestore.FieldValue.increment(1),
+        });
+
+        // Increment class participants
+        transaction.update(classRef, {
+          currentParticipants: admin.firestore.FieldValue.increment(1),
+        });
+
+        // Add user to participants subcollection
+        transaction.set(participantRef, {
+          userId: userId,
+          firstName: userData.firstName || "Unknown",
+          lastName: userData.lastName || "User",
+          registeredAt: admin.firestore.FieldValue.serverTimestamp(),
+          classPassPackageId: classPassPackageId,
+        });
+      });
+
+      functions.logger.info(
+        `User ${userId} registered for class ${classId} using pass ${classPassPackageId}.`
+      );
+      return {message: "Successfully registered for class!"};
+    } catch (error) {
+      if (error instanceof functions.https.HttpsError) {
+        throw error;
+      }
+      functions.logger.error("Error registering for class:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "An unexpected error occurred while registering for the class.",
         (error as Error).message
       );
     }

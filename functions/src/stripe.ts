@@ -53,7 +53,8 @@ export const createPaymentIntent = functions.https.onCall(
       ten_pack: 70000, // $700
       two_athlete: 14000, // $140
       three_athlete: 18000, // $180
-      class_registration: 4500, // $45
+      class_pass: 4500, // $45
+      class_registration: 4500, // $45 (deprecated, use class_pass)
     };
 
     if (!validPackages[packageType] || validPackages[packageType] !== amount) {
@@ -142,7 +143,8 @@ export const confirmPaymentAndCreatePackage = functions.https.onCall(
         ten_pack: 10,
         two_athlete: 1,
         three_athlete: 1,
-        class_registration: 0, // Classes don't create lesson packages
+        class_pass: 1, // Class pass creates 1 lesson package
+        class_registration: 0, // Deprecated: old direct payment method
       };
 
       const totalLessons = lessonCounts[packageType];
