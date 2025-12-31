@@ -7,6 +7,7 @@
 
 import SwiftUI
 import FirebaseFirestore
+import Combine
 
 struct ClassParticipantsView: View {
     let classId: String
@@ -136,8 +137,8 @@ class ParticipantsLoader: ObservableObject {
                 .getDocuments()
             
             participants = snapshot.documents.compactMap { doc in
-                guard let data = doc.data() as? [String: Any],
-                      let userId = data["userId"] as? String,
+                let data = doc.data()
+                guard let userId = data["userId"] as? String,
                       let firstName = data["firstName"] as? String,
                       let lastName = data["lastName"] as? String,
                       let timestamp = data["registeredAt"] as? Timestamp else {
