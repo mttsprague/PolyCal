@@ -5,6 +5,9 @@ import * as admin from "firebase-admin";
 // Initialize Firebase Admin SDK once when the function container starts
 admin.initializeApp();
 
+// Export Stripe payment functions
+export * from "./stripe";
+
 const db = admin.firestore();
 
 /**
