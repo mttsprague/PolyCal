@@ -64,12 +64,26 @@ export const createPaymentIntent = functions.https.onCall(
     }
 
     try {
-      const paymentIntent = await stripe.paymentIntents.create({
+      // Check if user has a Stripe customer ID
+      const userDoc = await db.collection("users").doc(userId).get();
+      const userData = userDoc.data();
+
+      const paymentIntentData: Stripe.PaymentIntentCreateParams = {
         amount,
         currency: "usd",
         metadata: {userId, packageType, trainerId},
         description: `${packageType.replace("_", " ")} lesson package`,
-      });
+      };
+
+      // If user has a customer ID, attach it to enable saving cards
+      if (userData?.stripeCustomerId) {
+        paymentIntentData.customer = userData.stripeCustomerId;
+        paymentIntentData.setup_future_usage = "off_session";
+      }
+
+      const paymentIntent = await stripe.paymentIntents.create(
+        paymentIntentData
+      );
 
       return {
         clientSecret: paymentIntent.client_secret,
@@ -161,6 +175,134 @@ export const confirmPaymentAndCreatePackage = functions.https.onCall(
       if (error instanceof functions.https.HttpsError) {
         throw error;
       }
+      const message = error instanceof Error ? error.message : String(error);
+      throw new functions.https.HttpsError("internal", message);
+    }
+  }
+);
+// Get or create Stripe Customer for user
+export const getOrCreateCustomer = functions.https.onCall(
+  async (request: functions.https.CallableRequest<{ userId: string }>) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "You must be signed in"
+      );
+    }
+
+    const {userId} = request.data;
+
+    if (!userId || request.auth.uid !== userId) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Invalid user ID"
+      );
+    }
+
+    try {
+      const userDoc = await db.collection("users").doc(userId).get();
+      const userData = userDoc.data();
+
+      // If customer ID already exists, return it
+      if (userData?.stripeCustomerId) {
+        return {customerId: userData.stripeCustomerId};
+      }
+
+      // Create new Stripe customer
+      const customer = await stripe.customers.create({
+        metadata: {firebaseUID: userId},
+      });
+
+      // Store customer ID in user document
+      await db.collection("users").doc(userId).update({
+        stripeCustomerId: customer.id,
+      });
+
+      return {customerId: customer.id};
+    } catch (error: unknown) {
+      console.error("Error getting/creating customer:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new functions.https.HttpsError("internal", message);
+    }
+  }
+);
+
+// Get payment methods for a customer
+export const getPaymentMethods = functions.https.onCall(
+  async (request: functions.https.CallableRequest<{ userId: string }>) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "You must be signed in"
+      );
+    }
+
+    const {userId} = request.data;
+
+    if (!userId || request.auth.uid !== userId) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Invalid user ID"
+      );
+    }
+
+    try {
+      const userDoc = await db.collection("users").doc(userId).get();
+      const userData = userDoc.data();
+
+      if (!userData?.stripeCustomerId) {
+        return {paymentMethods: []};
+      }
+
+      const paymentMethods = await stripe.paymentMethods.list({
+        customer: userData.stripeCustomerId,
+        type: "card",
+      });
+
+      return {
+        paymentMethods: paymentMethods.data.map((pm) => ({
+          id: pm.id,
+          brand: pm.card?.brand,
+          last4: pm.card?.last4,
+          expMonth: pm.card?.exp_month,
+          expYear: pm.card?.exp_year,
+        })),
+      };
+    } catch (error: unknown) {
+      console.error("Error getting payment methods:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new functions.https.HttpsError("internal", message);
+    }
+  }
+);
+
+// Detach (remove) a payment method
+export const detachPaymentMethod = functions.https.onCall(
+  async (request: functions.https.CallableRequest<{
+    userId: string;
+    paymentMethodId: string;
+  }>) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "You must be signed in"
+      );
+    }
+
+    const {userId, paymentMethodId} = request.data;
+
+    if (!userId || request.auth.uid !== userId) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Invalid user ID"
+      );
+    }
+
+    try {
+      await stripe.paymentMethods.detach(paymentMethodId);
+      return {success: true};
+    } catch (error: unknown) {
+      console.error("Error detaching payment method:", error);
       const message = error instanceof Error ? error.message : String(error);
       throw new functions.https.HttpsError("internal", message);
     }
