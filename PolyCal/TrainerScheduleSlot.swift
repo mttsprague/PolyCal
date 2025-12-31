@@ -24,11 +24,19 @@ struct TrainerScheduleSlot: Identifiable, Codable, Hashable {
     var clientName: String?
     var bookedAt: Date?
     var updatedAt: Date? // Added to match schema
+    var isClassBooking: Bool? // NEW: Indicates this is a class booking
+    var classId: String? // NEW: Reference to the class document
 
     // Consider a slot booked if the backend sets status to "booked" OR if clientId is present.
     var isBooked: Bool { status == .booked || clientId != nil }
+    
+    // Check if this is a class
+    var isClass: Bool { isClassBooking == true }
 
     var displayTitle: String {
+        if isClass {
+            return clientName ?? "Group Class"
+        }
         if isBooked {
             return clientName ?? "Booked"
         }
@@ -40,6 +48,7 @@ struct TrainerScheduleSlot: Identifiable, Codable, Hashable {
     }
 
     var visualColor: Color {
+        if isClass { return .orange }
         if isBooked { return .blue }
         switch status {
         case .open: return .green

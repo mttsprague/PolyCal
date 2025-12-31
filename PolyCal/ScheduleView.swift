@@ -29,6 +29,11 @@ struct ScheduleView: View {
     // Client detail sheet
     @State private var selectedClient: Client?
     @State private var clientSheetShown = false
+    
+    // Class participants sheet
+    @State private var selectedClassId: String?
+    @State private var selectedClassName: String?
+    @State private var classParticipantsShown = false
 
     // Layout constants
     private let rowHeight: CGFloat = 32
@@ -270,6 +275,11 @@ struct ScheduleView: View {
                         .padding()
                 }
             })
+            .sheet(isPresented: $classParticipantsShown) {
+                if let classId = selectedClassId, let className = selectedClassName {
+                    ClassParticipantsView(classId: classId, classTitle: className)
+                }
+            }
         }
     }
 
@@ -371,6 +381,15 @@ struct ScheduleView: View {
     }
 
     private func handleSlotTap(_ slot: TrainerScheduleSlot, defaultDay: Date, defaultHour: Int) {
+        // Check if this is a class booking
+        if slot.isClass, let classId = slot.classId {
+            selectedClassId = classId
+            selectedClassName = slot.clientName ?? "Group Class"
+            classParticipantsShown = true
+            return
+        }
+        
+        // Handle regular client booking
         if slot.isBooked, let clientId = slot.clientId {
             if let cached = viewModel.clientsById[clientId] {
                 self.selectedClient = cached
@@ -407,9 +426,15 @@ private struct EventCell: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(slot.visualColor)
-                .frame(width: 8, height: 8)
+            if slot.isClass {
+                Image(systemName: "figure.volleyball")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(slot.visualColor)
+            } else {
+                Circle()
+                    .fill(slot.visualColor)
+                    .frame(width: 8, height: 8)
+            }
             Text(slot.displayTitle)
                 .font(.caption)
                 .foregroundStyle(.primary)

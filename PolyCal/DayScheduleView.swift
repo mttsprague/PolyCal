@@ -14,6 +14,11 @@ struct DayScheduleView: View {
     // Client detail sheet
     @State private var selectedClient: Client?
     @State private var clientSheetShown = false
+    
+    // Class participants sheet
+    @State private var selectedClassId: String?
+    @State private var selectedClassName: String?
+    @State private var classParticipantsShown = false
 
     // Layout constants for list presentation
     private let rowCornerRadius: CGFloat = 12
@@ -87,10 +92,24 @@ struct DayScheduleView: View {
                         .padding()
                 }
             })
+            .sheet(isPresented: $classParticipantsShown) {
+                if let classId = selectedClassId, let className = selectedClassName {
+                    ClassParticipantsView(classId: classId, classTitle: className)
+                }
+            }
         }
     }
 
     private func handleTap(_ slot: TrainerScheduleSlot) async {
+        // Check if this is a class booking
+        if slot.isClass, let classId = slot.classId {
+            selectedClassId = classId
+            selectedClassName = slot.clientName ?? "Group Class"
+            classParticipantsShown = true
+            return
+        }
+        
+        // Otherwise handle regular client booking
         guard slot.isBooked, let clientId = slot.clientId else { return }
 
         // 1) Present immediately from cache or placeholder
@@ -214,15 +233,25 @@ private struct DayEventRow: View {
             // Content card
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    Circle()
-                        .fill(slot.visualColor)
-                        .frame(width: 8, height: 8)
+                    if slot.isClass {
+                        Image(systemName: "figure.volleyball")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(slot.visualColor)
+                    } else {
+                        Circle()
+                            .fill(slot.visualColor)
+                            .frame(width: 8, height: 8)
+                    }
                     Text(slot.displayTitle)
                         .font(.subheadline.weight(.semibold))
                     Spacer()
                 }
 
-                if slot.isBooked, let name = slot.clientName {
+                if slot.isClass {
+                    Text("Group Class")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else if slot.isBooked, let name = slot.clientName {
                     Text(name)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -250,6 +279,7 @@ private struct DayEventRow: View {
     }
 
     private func statusText(_ slot: TrainerScheduleSlot) -> String {
+        if slot.isClass { return "Tap to view participants" }
         if slot.isBooked { return "Booked" }
         switch slot.status {
         case .open: return "Open"
