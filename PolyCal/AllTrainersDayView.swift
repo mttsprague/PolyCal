@@ -22,7 +22,7 @@ struct AllTrainersDayView: View {
     private let gridHeaderVPad: CGFloat = 6
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             VStack(spacing: 0) {
                 // Header avatar + name (current user)
                 header

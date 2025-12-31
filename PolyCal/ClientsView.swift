@@ -11,7 +11,7 @@ struct ClientsView: View {
     @StateObject private var viewModel = ClientsViewModel()
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.xl) {
                     // Hero Header

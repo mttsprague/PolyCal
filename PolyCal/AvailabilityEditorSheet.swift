@@ -57,7 +57,7 @@ struct AvailabilityEditorSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 // Top choice: Availability vs Unavailability (status for single slot)
                 Picker("Status", selection: $singleStatus) {

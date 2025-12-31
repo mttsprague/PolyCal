@@ -40,7 +40,7 @@ struct MoreView: View {
     @State private var isBusy: Bool = false
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ScrollView {
                 if auth.isAuthenticated {
                     VStack(spacing: Spacing.xl) {

@@ -15,7 +15,7 @@ struct ScheduleOptionsView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     Text("Schedule Options")

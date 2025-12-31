@@ -24,7 +24,7 @@ struct DayScheduleView: View {
     private let rowCornerRadius: CGFloat = 12
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             VStack(spacing: 0) {
                 // Same header (avatar + name) as ScheduleView
                 header

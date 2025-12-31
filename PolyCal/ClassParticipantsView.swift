@@ -17,7 +17,7 @@ struct ClassParticipantsView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Group {
                 if participantsLoader.isLoading {
                     ProgressView("Loading participants...")
