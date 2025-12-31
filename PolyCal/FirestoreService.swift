@@ -73,8 +73,9 @@ final class FirestoreService {
                 return .open
             }()
 
-            // If a slot remains in this subcollection but is marked booked, skip it.
-            guard status != .booked else { return nil }
+            // Read class booking fields if present
+            let isClassBooking = data["isClassBooking"] as? Bool
+            let classId = data["classId"] as? String
 
             return TrainerScheduleSlot(
                 id: doc.documentID,
@@ -82,10 +83,12 @@ final class FirestoreService {
                 status: status,
                 startTime: startTs.dateValue(),
                 endTime: endTs.dateValue(),
-                clientId: nil,
-                clientName: nil,
-                bookedAt: nil,
-                updatedAt: (data["updatedAt"] as? Timestamp)?.dateValue()
+                clientId: data["clientId"] as? String,
+                clientName: data["clientName"] as? String,
+                bookedAt: (data["bookedAt"] as? Timestamp)?.dateValue(),
+                updatedAt: (data["updatedAt"] as? Timestamp)?.dateValue(),
+                isClassBooking: isClassBooking,
+                classId: classId
             )
         }
 
@@ -123,6 +126,8 @@ final class FirestoreService {
 
             let clientUID = data["clientUID"] as? String
             let clientName = data["clientName"] as? String
+            let isClassBooking = data["isClassBooking"] as? Bool
+            let classId = data["classId"] as? String
 
             return TrainerScheduleSlot(
                 id: slotIdentifier,
@@ -133,7 +138,9 @@ final class FirestoreService {
                 clientId: clientUID,
                 clientName: clientName,
                 bookedAt: (data["bookedAt"] as? Timestamp)?.dateValue(),
-                updatedAt: (data["updatedAt"] as? Timestamp)?.dateValue()
+                updatedAt: (data["updatedAt"] as? Timestamp)?.dateValue(),
+                isClassBooking: isClassBooking,
+                classId: classId
             )
         }
 
