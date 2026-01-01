@@ -81,21 +81,24 @@ struct ScheduleView: View {
                             .frame(width: timeColWidth)
                             .background(Color(UIColor.systemGray6))
 
-                            ScrollView(.horizontal, showsIndicators: true) {
-                                VStack(spacing: 0) {
-                                    HStack(spacing: columnSpacing) {
-                                        ForEach(viewModel.weekDays, id: \.self) { day in
-                                            VStack(spacing: 2) {
-                                                Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                                                    .font(.caption2.weight(.semibold))
-                                                    .foregroundStyle(.secondary)
-                                                Text(day, format: .dateTime.month(.abbreviated).day())
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
+                            ScrollViewReader { scrollProxy in
+                                ScrollView(.horizontal, showsIndicators: true) {
+                                    VStack(spacing: 0) {
+                                        HStack(spacing: columnSpacing) {
+                                            ForEach(viewModel.weekDays, id: \.self) { day in
+                                                VStack(spacing: 2) {
+                                                    Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
+                                                        .font(.caption2.weight(.semibold))
+                                                        .foregroundStyle(.secondary)
+                                                    Text(day, format: .dateTime.month(.abbreviated).day())
+                                                        .font(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                .frame(width: dayColumnWidth)
+                                                .multilineTextAlignment(.center)
+                                                .id(day)
                                             }
-                                            .frame(width: dayColumnWidth)
                                         }
-                                    }
                                     .padding(.vertical, gridHeaderVPad)
                                     .padding(.leading, 6)
                                     .padding(.trailing, 8)
@@ -171,8 +174,11 @@ struct ScheduleView: View {
                                     }
                                     .padding(.bottom, 8)
                                 }
+                                .onAppear {
+                                    scrollToCurrentDay(scrollProxy: scrollProxy)
+                                }
                             }
-                        }
+                            }
                         .background(Color(UIColor.systemGray6))
                     }
 
@@ -290,6 +296,27 @@ struct ScheduleView: View {
                 viewModel.selectedDate = newDate
             }
         }
+    }
+    
+    private func scrollToCurrentDay(scrollProxy: ScrollViewProxy) {
+        let today = viewModel.selectedDate
+        let weekday = Calendar.current.component(.weekday, from: today)
+        
+        // Determine anchor based on day of week
+        // Sunday = 1, Saturday = 7
+        let anchor: UnitPoint
+        if weekday == 1 {
+            // Sunday: left aligned
+            anchor = .leading
+        } else if weekday == 7 {
+            // Saturday: right aligned
+            anchor = .trailing
+        } else {
+            // Other days: center aligned
+            anchor = .center
+        }
+        
+        scrollProxy.scrollTo(today, anchor: anchor)
     }
 
     private var header: some View {
