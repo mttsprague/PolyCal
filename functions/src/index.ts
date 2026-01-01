@@ -137,6 +137,14 @@ export const bookLesson = functions.https.onCall(
           );
         }
 
+        // Validate package type - class passes cannot be used for lessons
+        if (lessonPackageData.packageType === "class_pass") {
+          throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Class passes can only be used to register for classes, not book lessons."
+          );
+        }
+
         if (lessonPackageData.lessonsUsed >= lessonPackageData.totalLessons) {
           throw new functions.https.HttpsError(
             "failed-precondition",
