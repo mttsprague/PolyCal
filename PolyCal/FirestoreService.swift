@@ -306,13 +306,27 @@ final class FirestoreService {
             }
             let phoneNumber = data["phoneNumber"] as? String ?? ""
             let photoURL = data["photoURL"] as? String
+            let athleteFirstName = data["athleteFirstName"] as? String
+            let athleteLastName = data["athleteLastName"] as? String
+            let athlete2FirstName = data["athlete2FirstName"] as? String
+            let athlete2LastName = data["athlete2LastName"] as? String
+            let athletePosition = data["athletePosition"] as? String
+            let athlete2Position = data["athlete2Position"] as? String
+            let notesForCoach = data["notesForCoach"] as? String
             return Client(
                 id: doc.documentID,
                 firstName: firstName,
                 lastName: lastName,
                 emailAddress: emailAddress,
                 phoneNumber: phoneNumber,
-                photoURL: photoURL
+                photoURL: photoURL,
+                athleteFirstName: athleteFirstName,
+                athleteLastName: athleteLastName,
+                athlete2FirstName: athlete2FirstName,
+                athlete2LastName: athlete2LastName,
+                athletePosition: athletePosition,
+                athlete2Position: athlete2Position,
+                notesForCoach: notesForCoach
             )
         }
         return clients

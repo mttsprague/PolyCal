@@ -14,6 +14,23 @@ struct Client: Identifiable, Codable, Hashable {
     var emailAddress: String
     var phoneNumber: String
     var photoURL: String?
+    var athleteFirstName: String?
+    var athleteLastName: String?
+    var athlete2FirstName: String?
+    var athlete2LastName: String?
+    var athletePosition: String?
+    var athlete2Position: String?
+    var notesForCoach: String?
 
     var fullName: String { "\(firstName) \(lastName)" }
+    
+    var athleteFullName: String? {
+        guard let first = athleteFirstName, let last = athleteLastName else { return nil }
+        return "\(first) \(last)"
+    }
+    
+    var athlete2FullName: String? {
+        guard let first = athlete2FirstName, let last = athlete2LastName else { return nil }
+        return "\(first) \(last)"
+    }
 }

@@ -83,6 +83,84 @@ struct ClientDetailView: View {
                     }
                 }
                 .padding(.horizontal, Spacing.lg)
+                
+                // Athlete Information
+                if client.athleteFullName != nil {
+                    CardView {
+                        VStack(alignment: .leading, spacing: Spacing.md) {
+                            Text("Athlete Information")
+                                .font(.headingSmall)
+                                .foregroundStyle(AppTheme.textPrimary)
+                            
+                            VStack(spacing: Spacing.sm) {
+                                if let athleteName = client.athleteFullName {
+                                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                                        Text("Primary Athlete")
+                                            .font(.labelMedium)
+                                            .foregroundStyle(AppTheme.textSecondary)
+                                        
+                                        HStack(spacing: Spacing.xs) {
+                                            Image(systemName: "figure.volleyball")
+                                                .font(.system(size: 14))
+                                            Text(athleteName)
+                                                .font(.bodyMedium)
+                                            if let position = client.athletePosition {
+                                                Text("•")
+                                                    .foregroundStyle(AppTheme.textTertiary)
+                                                Text(position)
+                                                    .font(.bodyMedium)
+                                                    .foregroundStyle(AppTheme.textSecondary)
+                                            }
+                                        }
+                                        .foregroundStyle(AppTheme.textPrimary)
+                                    }
+                                }
+                                
+                                if let athlete2Name = client.athlete2FullName {
+                                    Divider()
+                                    
+                                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                                        Text("Second Athlete")
+                                            .font(.labelMedium)
+                                            .foregroundStyle(AppTheme.textSecondary)
+                                        
+                                        HStack(spacing: Spacing.xs) {
+                                            Image(systemName: "figure.volleyball")
+                                                .font(.system(size: 14))
+                                            Text(athlete2Name)
+                                                .font(.bodyMedium)
+                                            if let position = client.athlete2Position {
+                                                Text("•")
+                                                    .foregroundStyle(AppTheme.textTertiary)
+                                                Text(position)
+                                                    .font(.bodyMedium)
+                                                    .foregroundStyle(AppTheme.textSecondary)
+                                            }
+                                        }
+                                        .foregroundStyle(AppTheme.textPrimary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, Spacing.lg)
+                }
+                
+                // Notes for Coach
+                if let notes = client.notesForCoach, !notes.isEmpty {
+                    CardView {
+                        VStack(alignment: .leading, spacing: Spacing.md) {
+                            Text("Notes")
+                                .font(.headingSmall)
+                                .foregroundStyle(AppTheme.textPrimary)
+                            
+                            Text(notes)
+                                .font(.bodyMedium)
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                    }
+                    .padding(.horizontal, Spacing.lg)
+                }
             }
             .padding(.bottom, Spacing.xxxl)
         }

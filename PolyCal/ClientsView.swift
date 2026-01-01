@@ -130,6 +130,47 @@ private struct ClientRow: View {
                             .font(.bodySmall)
                     }
                     .foregroundStyle(AppTheme.textSecondary)
+                    
+                    if let athleteName = client.athleteFullName {
+                        HStack(spacing: Spacing.xxs) {
+                            Image(systemName: "figure.volleyball")
+                                .font(.labelSmall)
+                            Text(athleteName)
+                                .font(.bodySmall)
+                            if let position = client.athletePosition {
+                                Text("(\(position))")
+                                    .font(.bodySmall)
+                                    .foregroundStyle(AppTheme.textTertiary)
+                            }
+                        }
+                        .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    
+                    if let athlete2Name = client.athlete2FullName {
+                        HStack(spacing: Spacing.xxs) {
+                            Image(systemName: "figure.volleyball")
+                                .font(.labelSmall)
+                            Text(athlete2Name)
+                                .font(.bodySmall)
+                            if let position = client.athlete2Position {
+                                Text("(\(position))")
+                                    .font(.bodySmall)
+                                    .foregroundStyle(AppTheme.textTertiary)
+                            }
+                        }
+                        .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    
+                    if let notes = client.notesForCoach, !notes.isEmpty {
+                        HStack(spacing: Spacing.xxs) {
+                            Image(systemName: "note.text")
+                                .font(.labelSmall)
+                            Text(notes)
+                                .font(.bodySmall)
+                                .lineLimit(2)
+                        }
+                        .foregroundStyle(AppTheme.textSecondary)
+                    }
                 }
                 
                 Spacer()
