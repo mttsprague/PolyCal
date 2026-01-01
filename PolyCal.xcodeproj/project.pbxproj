@@ -44,9 +44,22 @@
 		C3BCEE552EA16203004619EF /* index.ts */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.typescript; path = index.ts; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C3C7F58F2F060D330064EF0A /* Exceptions for "PolyCal" folder in "PolyCal" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = C32042142E9C9C95003EF857 /* PolyCal */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		C32042172E9C9C95003EF857 /* PolyCal */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C3C7F58F2F060D330064EF0A /* Exceptions for "PolyCal" folder in "PolyCal" target */,
+			);
 			path = PolyCal;
 			sourceTree = "<group>";
 		};

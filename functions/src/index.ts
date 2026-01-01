@@ -800,4 +800,76 @@ export const processTrainerAvailability = functions.https.onCall(
     }
   }
 );
+
+/**
+ * One-time function to update all class locations from "Midtown" to "Oakwood Community Church"
+ * Admin-only function
+ */
+export const updateClassLocations = functions.https.onCall(
+  async (request: functions.https.CallableRequest) => {
+    // Check if user is authenticated and is admin
+    if (!request.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "You must be signed in to perform this action."
+      );
+    }
+
+    const userId = request.auth.uid;
+    const userDoc = await db.collection("users").doc(userId).get();
+
+    if (!userDoc.exists || !userDoc.data()?.isAdmin) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Only admins can update class locations."
+      );
+    }
+
+    try {
+      const classesSnapshot = await db.collection("classes").get();
+
+      if (classesSnapshot.empty) {
+        return {message: "No classes found."};
+      }
+
+      const batch = db.batch();
+      let updateCount = 0;
+
+      classesSnapshot.forEach((doc) => {
+        const data = doc.data();
+
+        // Check if location contains "Midtown" (case insensitive)
+        if (data.location && data.location.toLowerCase().includes("midtown")) {
+          functions.logger.info(
+            `Updating class "${data.title}" (${doc.id}): "${data.location}" -> "Oakwood Community Church"`
+          );
+          batch.update(doc.ref, {
+            location: "Oakwood Community Church",
+          });
+          updateCount++;
+        }
+      });
+
+      if (updateCount > 0) {
+        await batch.commit();
+        functions.logger.info(
+          `Successfully updated ${updateCount} class location(s).`
+        );
+        return {
+          message: `Successfully updated ${updateCount} class location(s) from Midtown to Oakwood Community Church.`,
+          updatedCount: updateCount,
+        };
+      } else {
+        return {message: "No classes with 'Midtown' found. Nothing to update."};
+      }
+    } catch (error) {
+      functions.logger.error("Error updating class locations:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "An error occurred while updating class locations.",
+        (error as Error).message
+      );
+    }
+  }
+);
 /* eslint-enable quotes */
