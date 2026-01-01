@@ -42,9 +42,10 @@ struct ScheduleView: View {
     private let dayColumnWidth: CGFloat = 160
     private let columnSpacing: CGFloat = 0
     private let gridHeaderVPad: CGFloat = 6
+    private let headerRowHeight: CGFloat = 28
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 header
 
@@ -57,8 +58,6 @@ struct ScheduleView: View {
                 )
                 .padding(.top, 2)
                 .padding(.bottom, 4)
-
-                let headerRowHeight = 28.0
 
                 ZStack(alignment: .topLeading) {
                     ScrollView(.vertical, showsIndicators: true) {
@@ -95,86 +94,50 @@ struct ScheduleView: View {
                                                         .foregroundStyle(.secondary)
                                                 }
                                                 .frame(width: dayColumnWidth)
+                                                .padding(.horizontal, 6) // match cell padding
                                                 .multilineTextAlignment(.center)
                                                 .id(day)
                                             }
                                         }
-                                    .padding(.vertical, gridHeaderVPad)
-                                    .padding(.leading, 6)
-                                    .padding(.trailing, 8)
+                                        .padding(.vertical, gridHeaderVPad)
+                                        // Removed extra leading/trailing so header aligns with grid below
 
-                                    VStack(spacing: 0) {
-                                        ForEach(viewModel.visibleHours, id: \.self) { hour in
-                                            HStack(spacing: columnSpacing) {
-                                                ForEach(viewModel.weekDays, id: \.self) { day in
-                                                    ZStack(alignment: .topLeading) {
-                                                        RoundedRectangle(cornerRadius: 12)
-                                                            .fill(Color(UIColor.systemGray5))
-                                                        RoundedRectangle(cornerRadius: 12)
-                                                            .stroke(Color(UIColor.systemGray3), lineWidth: 0.5)
-
-                                                        let key = DateOnly(day)
-                                                        let cellStart = dateBySetting(hour: hour, on: day)
-                                                        let cellEnd = Calendar.current.date(byAdding: .hour, value: 1, to: cellStart) ?? cellStart.addingTimeInterval(3600)
-
-                                                        let matchingSlots: [TrainerScheduleSlot] = {
-                                                            if let slots = viewModel.slotsByDay[key] {
-                                                                return slots.filter {
-                                                                    $0.startTime < cellEnd && $0.endTime > cellStart
-                                                                }
+                                        VStack(spacing: 0) {
+                                            ForEach(viewModel.visibleHours, id: \.self) { hour in
+                                                HStack(spacing: columnSpacing) {
+                                                    ForEach(viewModel.weekDays, id: \.self) { day in
+                                                        HourDayCell(
+                                                            day: day,
+                                                            hour: hour,
+                                                            slotsForDay: viewModel.slotsByDay[DateOnly(day)] ?? [],
+                                                            dayColumnWidth: dayColumnWidth,
+                                                            rowHeight: rowHeight,
+                                                            horizontalPadding: 6,
+                                                            onEmptyTap: {
+                                                                editorContext = EditorContext(day: day, hour: hour)
+                                                            },
+                                                            onSlotTap: { slot in
+                                                                handleSlotTap(slot, defaultDay: day, defaultHour: hour)
+                                                            },
+                                                            onSetStatus: { status in
+                                                                Task { await viewModel.setSlotStatus(on: day, hour: hour, status: status) }
+                                                            },
+                                                            onClear: {
+                                                                Task { await viewModel.clearSlot(on: day, hour: hour) }
                                                             }
-                                                            return []
-                                                        }()
-
-                                                        ForEach(matchingSlots) { slot in
-                                                            EventCell(slot: slot)
-                                                                .padding(8)
-                                                                .contentShape(Rectangle())
-                                                                .onTapGesture {
-                                                                    handleSlotTap(slot, defaultDay: day, defaultHour: hour)
-                                                                }
-                                                        }
-                                                    }
-                                                    .frame(width: dayColumnWidth, height: rowHeight)
-                                                    .padding(.horizontal, 6)
-                                                    .contentShape(Rectangle())
-                                                    .onTapGesture {
-                                                        let key = DateOnly(day)
-                                                        let cellStart = dateBySetting(hour: hour, on: day)
-                                                        let cellEnd = Calendar.current.date(byAdding: .hour, value: 1, to: cellStart) ?? cellStart.addingTimeInterval(3600)
-                                                        let hasEvent = (viewModel.slotsByDay[key] ?? []).contains {
-                                                            $0.startTime < cellEnd && $0.endTime > cellStart
-                                                        }
-                                                        guard !hasEvent else { return }
-                                                        // Drive the sheet with an Identifiable item so init sees the correct values
-                                                        editorContext = EditorContext(day: day, hour: hour)
-                                                    }
-                                                    .contextMenu {
-                                                        Button {
-                                                            Task { await viewModel.setSlotStatus(on: day, hour: hour, status: .open) }
-                                                        } label: {
-                                                            Label("Set Available", systemImage: "checkmark.circle")
-                                                        }
-                                                        Button(role: .destructive) {
-                                                            Task { await viewModel.setSlotStatus(on: day, hour: hour, status: .unavailable) }
-                                                        } label: {
-                                                            Label("Set Unavailable", systemImage: "xmark.circle")
-                                                        }
-                                                        Divider()
-                                                        Button(role: .destructive) {
-                                                            Task { await viewModel.clearSlot(on: day, hour: hour) }
-                                                        } label: {
-                                                            Label("Clear", systemImage: "trash")
-                                                        }
+                                                        )
                                                     }
                                                 }
+                                                .padding(.vertical, rowVerticalPadding)
                                             }
-                                            .padding(.vertical, rowVerticalPadding)
                                         }
+                                        .padding(.bottom, 8)
                                     }
-                                    .padding(.bottom, 8)
                                 }
                                 .onAppear {
+                                    scrollToCurrentDay(scrollProxy: scrollProxy)
+                                }
+                                .onChange(of: viewModel.selectedDate) { _, _ in
                                     scrollToCurrentDay(scrollProxy: scrollProxy)
                                 }
                             }
@@ -299,24 +262,10 @@ struct ScheduleView: View {
     }
     
     private func scrollToCurrentDay(scrollProxy: ScrollViewProxy) {
-        let today = viewModel.selectedDate
-        let weekday = Calendar.current.component(.weekday, from: today)
-        
-        // Determine anchor based on day of week
-        // Sunday = 1, Saturday = 7
-        let anchor: UnitPoint
-        if weekday == 1 {
-            // Sunday: left aligned
-            anchor = .leading
-        } else if weekday == 7 {
-            // Saturday: right aligned
-            anchor = .trailing
-        } else {
-            // Other days: center aligned
-            anchor = .center
-        }
-        
-        scrollProxy.scrollTo(today, anchor: anchor)
+        // Find the exact Date instance from weekDays that matches selectedDate (same calendar day)
+        let cal = Calendar.current
+        let target = viewModel.weekDays.first(where: { cal.isDate($0, inSameDayAs: viewModel.selectedDate) }) ?? viewModel.selectedDate
+        scrollProxy.scrollTo(target, anchor: .center)
     }
 
     private var header: some View {
@@ -446,104 +395,174 @@ struct ScheduleView: View {
             editorContext = EditorContext(day: defaultDay, hour: defaultHour)
         }
     }
-}
 
-private struct EventCell: View {
-    let slot: TrainerScheduleSlot
+    // MARK: - Helper Views (nested)
 
-    var body: some View {
-        HStack(spacing: 8) {
-            if slot.isClass {
-                Image(systemName: "figure.volleyball")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(slot.visualColor)
-            } else {
-                Circle()
-                    .fill(slot.visualColor)
-                    .frame(width: 8, height: 8)
-            }
-            Text(slot.displayTitle)
-                .font(.caption)
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer()
+    private struct HourDayCell: View {
+        let day: Date
+        let hour: Int
+        let slotsForDay: [TrainerScheduleSlot]
+        let dayColumnWidth: CGFloat
+        let rowHeight: CGFloat
+        let horizontalPadding: CGFloat
+        let onEmptyTap: () -> Void
+        let onSlotTap: (TrainerScheduleSlot) -> Void
+        let onSetStatus: (TrainerScheduleSlot.Status) -> Void
+        let onClear: () -> Void
+
+        // Computed values to avoid local lets in body builder
+        private var cellStart: Date {
+            Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: day) ?? day
         }
-        .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(slot.visualColor.opacity(0.08))
-        )
+        private var cellEnd: Date {
+            Calendar.current.date(byAdding: .hour, value: 1, to: cellStart) ?? cellStart.addingTimeInterval(3600)
+        }
+        private var matching: [TrainerScheduleSlot] {
+            slotsForDay.filter { $0.startTime < cellEnd && $0.endTime > cellStart }
+        }
+
+        var body: some View {
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(UIColor.systemGray5))
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color(UIColor.systemGray3), lineWidth: 0.5)
+
+                ForEach(matching) { slot in
+                    EventCell(slot: slot)
+                        .padding(8)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            onSlotTap(slot)
+                        }
+                }
+            }
+            .frame(width: dayColumnWidth, height: rowHeight)
+            .padding(.horizontal, horizontalPadding)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if matching.isEmpty {
+                    onEmptyTap()
+                }
+            }
+            .contextMenu {
+                Button {
+                    onSetStatus(.open)
+                } label: {
+                    Label("Set Available", systemImage: "checkmark.circle")
+                }
+                Button(role: .destructive) {
+                    onSetStatus(.unavailable)
+                } label: {
+                    Label("Set Unavailable", systemImage: "xmark.circle")
+                }
+                Divider()
+                Button(role: .destructive) {
+                    onClear()
+                } label: {
+                    Label("Clear", systemImage: "trash")
+                }
+            }
+        }
     }
-}
 
-private struct ClientDetailSheet: View {
-    let client: Client
+    private struct EventCell: View {
+        let slot: TrainerScheduleSlot
 
-    var body: some View {
-        VStack(spacing: 16) {
-            if let urlString = client.photoURL, let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 72, height: 72)
-                            .clipShape(Circle())
-                            .transition(.opacity)
-                    case .empty, .failure:
-                        Circle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(width: 72, height: 72)
-                            .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
-                    @unknown default:
-                        Circle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(width: 72, height: 72)
-                            .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
-                    }
+        var body: some View {
+            HStack(spacing: 8) {
+                if slot.isClass {
+                    Image(systemName: "figure.volleyball")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(slot.visualColor)
+                } else {
+                    Circle()
+                        .fill(slot.visualColor)
+                        .frame(width: 8, height: 8)
                 }
-            } else {
-                Circle()
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(width: 72, height: 72)
-                    .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
+                Text(slot.displayTitle)
+                    .font(.caption)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer()
             }
-
-            VStack(spacing: 4) {
-                Text(client.fullName)
-                    .font(.title3.weight(.semibold))
-                if !client.emailAddress.isEmpty {
-                    Link(destination: URL(string: "mailto:\(client.emailAddress)")!) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "envelope.fill")
-                                .font(.system(size: 12))
-                            Text(client.emailAddress)
-                                .font(.subheadline)
-                        }
-                        .foregroundStyle(AppTheme.primary)
-                    }
-                }
-                if !client.phoneNumber.isEmpty {
-                    VStack(spacing: Spacing.xs) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "phone.fill")
-                                .font(.system(size: 12))
-                            Text(client.phoneNumber)
-                                .font(.subheadline)
-                        }
-                        .foregroundStyle(.secondary)
-                        
-                        InlinePhoneActions(phoneNumber: client.phoneNumber)
-                    }
-                    .padding(.top, Spacing.xxs)
-                }
-            }
-
-            Spacer()
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(slot.visualColor.opacity(0.08))
+            )
         }
-        .padding()
-        .presentationDragIndicator(.visible)
+    }
+
+    private struct ClientDetailSheet: View {
+        let client: Client
+
+        var body: some View {
+            VStack(spacing: 16) {
+                if let urlString = client.photoURL, let url = URL(string: urlString) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 72, height: 72)
+                                .clipShape(Circle())
+                                .transition(.opacity)
+                        case .empty, .failure:
+                            Circle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(width: 72, height: 72)
+                                .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
+                        @unknown default:
+                            Circle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(width: 72, height: 72)
+                                .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
+                        }
+                    }
+                } else {
+                    Circle()
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(width: 72, height: 72)
+                        .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
+                }
+
+                VStack(spacing: 4) {
+                    Text(client.fullName)
+                        .font(.title3.weight(.semibold))
+                    if !client.emailAddress.isEmpty {
+                        Link(destination: URL(string: "mailto:\(client.emailAddress)")!) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "envelope.fill")
+                                    .font(.system(size: 12))
+                                Text(client.emailAddress)
+                                    .font(.subheadline)
+                            }
+                            .foregroundStyle(AppTheme.primary)
+                        }
+                    }
+                    if !client.phoneNumber.isEmpty {
+                        VStack(spacing: Spacing.xs) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "phone.fill")
+                                    .font(.system(size: 12))
+                                Text(client.phoneNumber)
+                                    .font(.subheadline)
+                            }
+                            .foregroundStyle(.secondary)
+                            
+                            InlinePhoneActions(phoneNumber: client.phoneNumber)
+                        }
+                        .padding(.top, Spacing.xxs)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding()
+            .presentationDragIndicator(.visible)
+        }
     }
 }

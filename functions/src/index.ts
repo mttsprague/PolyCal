@@ -368,6 +368,211 @@ export const registerForClass = functions.https.onCall(
 );
 
 /**
+ * Cancel a booked lesson
+ */
+interface CancelLessonData {
+  bookingId: string;
+}
+
+export const cancelLesson = functions.https.onCall(
+  async (request: functions.https.CallableRequest<CancelLessonData>) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "You must be signed in to cancel a lesson."
+      );
+    }
+    const userId = request.auth.uid;
+    const {bookingId} = request.data;
+
+    if (!bookingId) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Missing bookingId"
+      );
+    }
+
+    try {
+      const bookingRef = db.collection("bookings").doc(bookingId);
+
+      await db.runTransaction(async (transaction) => {
+        const bookingDoc = await transaction.get(bookingRef);
+
+        if (!bookingDoc.exists) {
+          throw new functions.https.HttpsError(
+            "not-found",
+            "Booking not found."
+          );
+        }
+
+        const bookingData = bookingDoc.data();
+        if (!bookingData) {
+          throw new functions.https.HttpsError(
+            "internal",
+            "Booking data is missing."
+          );
+        }
+
+        // Verify user owns this booking
+        if (bookingData.clientUID !== userId) {
+          throw new functions.https.HttpsError(
+            "permission-denied",
+            "You can only cancel your own bookings."
+          );
+        }
+
+        // Get the lesson package and decrement lessonsUsed
+        const packageRef = db
+          .collection("users")
+          .doc(userId)
+          .collection("lessonPackages")
+          .doc(bookingData.packageId);
+
+        const packageDoc = await transaction.get(packageRef);
+        if (packageDoc.exists) {
+          transaction.update(packageRef, {
+            lessonsUsed: admin.firestore.FieldValue.increment(-1),
+          });
+        }
+
+        // Update trainer's schedule slot back to open
+        if (bookingData.trainerId && bookingData.slotId) {
+          const trainerSlotRef = db
+            .collection("trainers")
+            .doc(bookingData.trainerId)
+            .collection("schedules")
+            .doc(bookingData.slotId);
+
+          const slotDoc = await transaction.get(trainerSlotRef);
+          if (slotDoc.exists) {
+            transaction.update(trainerSlotRef, {
+              status: "open",
+              clientId: null,
+              clientName: null,
+              bookedAt: null,
+            });
+          }
+        }
+
+        // Delete the booking
+        transaction.delete(bookingRef);
+      });
+
+      functions.logger.info(`User ${userId} cancelled booking ${bookingId}`);
+      return {message: "Lesson cancelled successfully!"};
+    } catch (error) {
+      if (error instanceof functions.https.HttpsError) {
+        throw error;
+      }
+      functions.logger.error("Error cancelling lesson:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "An unexpected error occurred while cancelling the lesson.",
+        (error as Error).message
+      );
+    }
+  }
+);
+
+/**
+ * Cancel a class registration
+ */
+interface CancelClassRegistrationData {
+  classId: string;
+}
+
+export const cancelClassRegistration = functions.https.onCall(
+  async (
+    request: functions.https.CallableRequest<CancelClassRegistrationData>
+  ) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "You must be signed in to cancel a registration."
+      );
+    }
+    const userId = request.auth.uid;
+    const {classId} = request.data;
+
+    if (!classId) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Missing classId"
+      );
+    }
+
+    try {
+      const classRef = db.collection("classes").doc(classId);
+      const participantRef = classRef.collection("participants").doc(userId);
+
+      await db.runTransaction(async (transaction) => {
+        const classDoc = await transaction.get(classRef);
+        const participantDoc = await transaction.get(participantRef);
+
+        if (!classDoc.exists) {
+          throw new functions.https.HttpsError(
+            "not-found",
+            "Class not found."
+          );
+        }
+
+        if (!participantDoc.exists) {
+          throw new functions.https.HttpsError(
+            "not-found",
+            "You are not registered for this class."
+          );
+        }
+
+        const participantData = participantDoc.data();
+        if (!participantData) {
+          throw new functions.https.HttpsError(
+            "internal",
+            "Participant data is missing."
+          );
+        }
+
+        // Get the class pass package and decrement lessonsUsed
+        const classPassRef = db
+          .collection("users")
+          .doc(userId)
+          .collection("lessonPackages")
+          .doc(participantData.classPassPackageId);
+
+        const classPassDoc = await transaction.get(classPassRef);
+        if (classPassDoc.exists) {
+          transaction.update(classPassRef, {
+            lessonsUsed: admin.firestore.FieldValue.increment(-1),
+          });
+        }
+
+        // Decrement class participants count
+        transaction.update(classRef, {
+          currentParticipants: admin.firestore.FieldValue.increment(-1),
+        });
+
+        // Remove participant from class
+        transaction.delete(participantRef);
+      });
+
+      functions.logger.info(
+        `User ${userId} cancelled registration for class ${classId}`
+      );
+      return {message: "Class registration cancelled successfully!"};
+    } catch (error) {
+      if (error instanceof functions.https.HttpsError) {
+        throw error;
+      }
+      functions.logger.error("Error cancelling class registration:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "An unexpected error occurred while cancelling the registration.",
+        (error as Error).message
+      );
+    }
+  }
+);
+
+/**
  * Cloud Function to generate or process trainer availability slots.
  * Creates 'open' schedule slots for the specified range and weekdays.
  *
