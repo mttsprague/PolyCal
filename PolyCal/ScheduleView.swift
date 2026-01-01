@@ -178,7 +178,7 @@ struct ScheduleView: View {
                                     scrollToCurrentDay(scrollProxy: scrollProxy)
                                 }
                             }
-                            }
+                        }
                         .background(Color(UIColor.systemGray6))
                     }
 
