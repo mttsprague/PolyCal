@@ -203,7 +203,6 @@ final class ScheduleViewModel: ObservableObject {
     }
     
     private func fetchParticipants(classId: String) async throws -> [ClassParticipant] {
-        print("DEBUG ScheduleViewModel: Fetching participants for class: \(classId)")
         let db = Firestore.firestore()
         
         // Break the chain to help the compiler pick the async getDocuments() overload
@@ -214,16 +213,12 @@ final class ScheduleViewModel: ObservableObject {
         
         let snapshot: QuerySnapshot = try await query.getDocuments()
         
-        print("DEBUG ScheduleViewModel: Found \(snapshot.documents.count) participant documents")
-        
         let participants: [ClassParticipant] = snapshot.documents.compactMap { doc in
             let data = doc.data()
-            print("DEBUG ScheduleViewModel: Participant doc data: \(data)")
             guard let userId = data["userId"] as? String,
                   let firstName = data["firstName"] as? String,
                   let lastName = data["lastName"] as? String,
                   let registeredAtTimestamp = data["registeredAt"] as? Timestamp else {
-                print("DEBUG ScheduleViewModel: Missing required fields in participant doc")
                 return nil
             }
             
@@ -236,7 +231,6 @@ final class ScheduleViewModel: ObservableObject {
             )
         }
         
-        print("DEBUG ScheduleViewModel: Parsed \(participants.count) participants successfully")
         return participants
     }
 

@@ -367,12 +367,8 @@ struct ScheduleView: View {
     private func handleSlotTap(_ slot: TrainerScheduleSlot, defaultDay: Date, defaultHour: Int) {
         // Check if this is a class booking
         if slot.isClass, let classId = slot.classId {
-            print("DEBUG: Tapped class with ID: \(classId)")
-            print("DEBUG: Set class title: \(slot.clientName ?? "Group Class")")
-            
             // Use cached participants if available
             if let cached = viewModel.participantsByClassId[classId] {
-                print("DEBUG: Using cached participants: \(cached.count) participants")
                 // Present sheet with context item
                 self.classSheetContext = ClassSheetContext(
                     classId: classId,
@@ -381,8 +377,6 @@ struct ScheduleView: View {
                 )
                 return
             }
-            
-            print("DEBUG: No cached participants, fetching...")
             
             // Fallback: Pre-load participants if not in cache (shouldn't happen normally)
             Task {
