@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FirebaseFirestore
 
 struct ScheduleView: View {
     @EnvironmentObject private var auth: AuthManager
