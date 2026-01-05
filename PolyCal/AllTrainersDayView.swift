@@ -161,7 +161,7 @@ struct AllTrainersDayView: View {
                     ClassParticipantsView(
                         classId: classId,
                         classTitle: className,
-                        preloadedParticipants: preloadedParticipants
+                        preloadedParticipants: preloadedParticipants.isEmpty ? nil : preloadedParticipants
                     )
                 }
             }

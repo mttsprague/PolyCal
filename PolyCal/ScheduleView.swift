@@ -251,8 +251,15 @@ struct ScheduleView: View {
                     ClassParticipantsView(
                         classId: classId, 
                         classTitle: className,
-                        preloadedParticipants: preloadedParticipants
+                        preloadedParticipants: preloadedParticipants.isEmpty ? nil : preloadedParticipants
                     )
+                } else {
+                    // Fallback in case of nil values
+                    VStack {
+                        Text("Loading class details...")
+                        ProgressView()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
@@ -365,15 +372,20 @@ struct ScheduleView: View {
     private func handleSlotTap(_ slot: TrainerScheduleSlot, defaultDay: Date, defaultHour: Int) {
         // Check if this is a class booking
         if slot.isClass, let classId = slot.classId {
+            print("DEBUG: Tapped class with ID: \(classId)")
             selectedClassId = classId
             selectedClassName = slot.clientName ?? "Group Class"
+            print("DEBUG: Set class title: \(selectedClassName ?? "nil")")
             
             // Use cached participants if available
             if let cached = viewModel.participantsByClassId[classId] {
+                print("DEBUG: Using cached participants: \(cached.count) participants")
                 self.preloadedParticipants = cached
                 self.classParticipantsShown = true
                 return
             }
+            
+            print("DEBUG: No cached participants, fetching...")
             
             // Fallback: Pre-load participants if not in cache (shouldn't happen normally)
             Task {

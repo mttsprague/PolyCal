@@ -203,6 +203,7 @@ final class ScheduleViewModel: ObservableObject {
     }
     
     private func fetchParticipants(classId: String) async throws -> [ClassParticipant] {
+        print("DEBUG ScheduleViewModel: Fetching participants for class: \(classId)")
         let db = Firestore.firestore()
         let snapshot = try await db.collection("classes")
             .document(classId)
@@ -210,12 +211,16 @@ final class ScheduleViewModel: ObservableObject {
             .order(by: "registeredAt", descending: false)
             .getDocuments()
         
-        return snapshot.documents.compactMap { doc in
+        print("DEBUG ScheduleViewModel: Found \(snapshot.documents.count) participant documents")
+        
+        let participants = snapshot.documents.compactMap { doc in
             let data = doc.data()
+            print("DEBUG ScheduleViewModel: Participant doc data: \(data)")
             guard let userId = data["userId"] as? String,
                   let firstName = data["firstName"] as? String,
                   let lastName = data["lastName"] as? String,
                   let registeredAtTimestamp = data["registeredAt"] as? Timestamp else {
+                print("DEBUG ScheduleViewModel: Missing required fields in participant doc")
                 return nil
             }
             
@@ -227,6 +232,9 @@ final class ScheduleViewModel: ObservableObject {
                 registeredAt: registeredAtTimestamp.dateValue()
             )
         }
+        
+        print("DEBUG ScheduleViewModel: Parsed \(participants.count) participants successfully")
+        return participants
     }
 
     // MARK: - Editing availability (single slot at hour granularity)
