@@ -13,8 +13,14 @@ struct ClassParticipantsView: View {
     let classId: String
     let classTitle: String
     
-    @StateObject private var participantsLoader = ParticipantsLoader()
+    @StateObject private var participantsLoader: ParticipantsLoader
     @Environment(\.dismiss) private var dismiss
+    
+    init(classId: String, classTitle: String) {
+        self.classId = classId
+        self.classTitle = classTitle
+        _participantsLoader = StateObject(wrappedValue: ParticipantsLoader(classId: classId))
+    }
     
     var body: some View {
         NavigationView {
@@ -51,16 +57,6 @@ struct ClassParticipantsView: View {
                     Button("Done") { dismiss() }
                 }
             }
-        }
-        .onAppear {
-            if participantsLoader.participants.isEmpty && !participantsLoader.isLoading {
-                Task {
-                    await participantsLoader.loadParticipants(classId: classId)
-                }
-            }
-        }
-        .task {
-            await participantsLoader.loadParticipants(classId: classId)
         }
     }
 }
@@ -132,8 +128,16 @@ class ParticipantsLoader: ObservableObject {
     @Published var isLoading = false
     
     private let db = Firestore.firestore()
+    private let classId: String
     
-    func loadParticipants(classId: String) async {
+    init(classId: String) {
+        self.classId = classId
+        Task {
+            await loadParticipants()
+        }
+    }
+    
+    func loadParticipants() async {
         isLoading = true
         
         do {
