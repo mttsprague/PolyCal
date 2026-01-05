@@ -34,7 +34,7 @@ struct ScheduleView: View {
     // Class participants sheet
     @State private var selectedClassId: String?
     @State private var selectedClassName: String?
-    @State private var preloadedParticipants: [ClassParticipant] = []
+    @State private var preloadedParticipants: [ClassParticipant]?
     @State private var classParticipantsShown = false
 
     // Layout constants
@@ -251,7 +251,7 @@ struct ScheduleView: View {
                     ClassParticipantsView(
                         classId: classId, 
                         classTitle: className,
-                        preloadedParticipants: preloadedParticipants.isEmpty ? nil : preloadedParticipants
+                        preloadedParticipants: preloadedParticipants
                     )
                 } else {
                     // Fallback in case of nil values

@@ -205,15 +205,18 @@ final class ScheduleViewModel: ObservableObject {
     private func fetchParticipants(classId: String) async throws -> [ClassParticipant] {
         print("DEBUG ScheduleViewModel: Fetching participants for class: \(classId)")
         let db = Firestore.firestore()
-        let snapshot = try await db.collection("classes")
+        
+        // Break the chain to help the compiler pick the async getDocuments() overload
+        let query: Query = db.collection("classes")
             .document(classId)
             .collection("participants")
             .order(by: "registeredAt", descending: false)
-            .getDocuments()
+        
+        let snapshot: QuerySnapshot = try await query.getDocuments()
         
         print("DEBUG ScheduleViewModel: Found \(snapshot.documents.count) participant documents")
         
-        let participants = snapshot.documents.compactMap { doc in
+        let participants: [ClassParticipant] = snapshot.documents.compactMap { doc in
             let data = doc.data()
             print("DEBUG ScheduleViewModel: Participant doc data: \(data)")
             guard let userId = data["userId"] as? String,

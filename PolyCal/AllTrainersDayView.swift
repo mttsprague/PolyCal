@@ -20,7 +20,7 @@ struct AllTrainersDayView: View {
     // Class participants sheet
     @State private var selectedClassId: String?
     @State private var selectedClassName: String?
-    @State private var preloadedParticipants: [ClassParticipant] = []
+    @State private var preloadedParticipants: [ClassParticipant]?
     @State private var classParticipantsShown = false
 
     // Layout constants (mirroring ScheduleView where sensible)
@@ -161,7 +161,7 @@ struct AllTrainersDayView: View {
                     ClassParticipantsView(
                         classId: classId,
                         classTitle: className,
-                        preloadedParticipants: preloadedParticipants.isEmpty ? nil : preloadedParticipants
+                        preloadedParticipants: preloadedParticipants
                     )
                 }
             }
