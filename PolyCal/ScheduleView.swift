@@ -247,6 +247,7 @@ struct ScheduleView: View {
                 }
             })
             .sheet(isPresented: $classParticipantsShown) {
+                let _ = print("DEBUG SHEET: classId=\(selectedClassId ?? "nil"), className=\(selectedClassName ?? "nil"), participants=\(preloadedParticipants?.count ?? -1)")
                 if let classId = selectedClassId, let className = selectedClassName {
                     ClassParticipantsView(
                         classId: classId, 
@@ -258,6 +259,12 @@ struct ScheduleView: View {
                     VStack {
                         Text("Loading class details...")
                         ProgressView()
+                        Text("ClassId: \(selectedClassId ?? "nil")")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("ClassName: \(selectedClassName ?? "nil")")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -373,15 +380,19 @@ struct ScheduleView: View {
         // Check if this is a class booking
         if slot.isClass, let classId = slot.classId {
             print("DEBUG: Tapped class with ID: \(classId)")
-            selectedClassId = classId
-            selectedClassName = slot.clientName ?? "Group Class"
-            print("DEBUG: Set class title: \(selectedClassName ?? "nil")")
+            print("DEBUG: Set class title: \(slot.clientName ?? "Group Class")")
             
             // Use cached participants if available
             if let cached = viewModel.participantsByClassId[classId] {
                 print("DEBUG: Using cached participants: \(cached.count) participants")
+                // Set all state together
+                self.selectedClassId = classId
+                self.selectedClassName = slot.clientName ?? "Group Class"
                 self.preloadedParticipants = cached
-                self.classParticipantsShown = true
+                // Delay showing sheet slightly to ensure state updates propagate
+                DispatchQueue.main.async {
+                    self.classParticipantsShown = true
+                }
                 return
             }
             
