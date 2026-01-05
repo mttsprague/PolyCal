@@ -6,66 +6,86 @@
 //
 
 import SwiftUI
+import FirebaseFirestore
 
 struct DayScheduleView: View {
     @EnvironmentObject private var auth: AuthManager
     @ObservedObject var viewModel: ScheduleViewModel
 
-    // Client detail sheet
-    @State private var selectedClient: Client?
-    @State private var clientSheetShown = false
-    
-    // Class participants sheet
-    @State private var selectedClassId: String?
-    @State private var selectedClassName: String?
-    @State private var preloadedParticipants: [ClassParticipant] = []
-    @State private var classParticipantsShown = false
-
-    // Layout constants for list presentation
-    private let rowCornerRadius: CGFloat = 12
-
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                // Same header (avatar + name) as ScheduleView
-                header
+                // Header with trainer info
+                HStack(spacing: 12) {
+                    avatarView
+                        .frame(width: 36, height: 36)
 
-                // Same week strip, defaulting to today's date; blue highlight = selected day
-                WeekStrip(
-                    title: viewModel.weekTitle,
-                    weekDays: viewModel.weekDays,
-                    selectedDate: $viewModel.selectedDate,
-                    onPrevWeek: { shiftWeek(by: -1) },
-                    onNextWeek: { shiftWeek(by: 1) }
-                )
-                .padding(.top, 2)
-                .padding(.bottom, 8)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(auth.trainerDisplayName ?? "My Day")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
 
-                // Day content
-                ScrollView {
-                    VStack(spacing: 12) {
-                        let key = DateOnly(viewModel.selectedDate)
-                        let slots = (viewModel.slotsByDay[key] ?? []).sorted { $0.startTime < $1.startTime }
-
-                        if slots.isEmpty {
-                            emptyState
-                                .padding(.top, 24)
-                        } else {
-                            ForEach(slots) { slot in
-                                DayEventRow(slot: slot)
-                                    .padding(.horizontal)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        Task {
-                                            await handleTap(slot)
-                                        }
-                                    }
-                            }
-                            .padding(.vertical, 8)
+                        if auth.isAuthenticated {
+                            Text("You")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Spacer()
                 }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .padding(.top, 8)
+
+                // Selected date title
+                Text(viewModel.selectedDate.formatted(.dateTime.weekday(.wide).month(.abbreviated).day().year()))
+                    .font(.headline)
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Simple hour-by-hour list for the selected day
+                List {
+                    ForEach(viewModel.visibleHours, id: \.self) { hour in
+                        let day = viewModel.selectedDate
+                        let slotsForDay = viewModel.slotsByDay[DateOnly(day)] ?? []
+                        let cellStart = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: day) ?? day
+                        let cellEnd = Calendar.current.date(byAdding: .hour, value: 1, to: cellStart) ?? cellStart.addingTimeInterval(3600)
+                        let matching = slotsForDay.filter { $0.startTime < cellEnd && $0.endTime > cellStart }
+
+                        HStack {
+                            Text(hourLabel(hour))
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+
+                            Divider()
+                                .padding(.horizontal, 4)
+
+                            if let slot = matching.first {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(slot.displayTitle)
+                                        .font(.body)
+                                        .foregroundStyle(.primary)
+                                    if slot.isBooked, let name = slot.clientName {
+                                        Text(name)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            } else {
+                                Text("No events")
+                                    .font(.callout)
+                                    .foregroundStyle(.tertiary)
+                            }
+
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                }
+                .listStyle(.plain)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -74,153 +94,7 @@ struct DayScheduleView: View {
                         .font(.headline)
                 }
             }
-            .task {
-                // Ensure we have data for the current week when this view appears
-                await viewModel.loadWeek()
-            }
-            .onChange(of: viewModel.selectedDate) { _, _ in
-                Task { await viewModel.loadWeek() }
-            }
-            .sheet(isPresented: $clientSheetShown, onDismiss: {
-                selectedClient = nil
-            }, content: {
-                if let client = selectedClient {
-                    ClientDetailSheet(client: client)
-                        .presentationDetents([.medium, .large])
-                } else {
-                    // Should rarely show now; we present after data arrives.
-                    ProgressView("Loading…")
-                        .padding()
-                }
-            })
-            .sheet(isPresented: $classParticipantsShown) {
-                if let classId = selectedClassId, let className = selectedClassName {
-                    ClassParticipantsView(
-                        classId: classId, 
-                        classTitle: className,
-                        preloadedParticipants: preloadedParticipants
-                    )
-                }
-            }
         }
-    }
-
-    private func handleTap(_ slot: TrainerScheduleSlot) async {
-        // Check if this is a class booking
-        if slot.isClass, let classId = slot.classId {
-            selectedClassId = classId
-            selectedClassName = slot.clientName ?? "Group Class"
-            
-            // Pre-load participants BEFORE showing sheet
-            do {
-                let participants = try await fetchParticipants(classId: classId)
-                await MainActor.run {
-                    self.preloadedParticipants = participants
-                    self.classParticipantsShown = true
-                }
-            } catch {
-                print("Error loading participants: \(error)")
-                await MainActor.run {
-                    // Show sheet anyway with empty participants list
-                    self.preloadedParticipants = []
-                    self.classParticipantsShown = true
-                }
-            }
-            return
-        }
-        
-        // Otherwise handle regular client booking
-        guard slot.isBooked, let clientId = slot.clientId else { return }
-
-        // 1) Check cache first
-        if let cached = viewModel.clientsById[clientId] {
-            self.selectedClient = cached
-            self.clientSheetShown = true
-            return
-        }
-
-        // 2) Fetch data BEFORE showing sheet
-        let fetched = try? await FirestoreService.shared.fetchClient(by: clientId)
-        await MainActor.run {
-            if let client = fetched {
-                self.selectedClient = client
-                viewModel.clientsById[clientId] = client
-                self.clientSheetShown = true
-            } else {
-                // Fallback to placeholder if fetch fails
-                self.selectedClient = Client(
-                    id: clientId,
-                    firstName: slot.clientName ?? "Booked",
-                    lastName: "",
-                    emailAddress: "",
-                    phoneNumber: "",
-                    photoURL: nil
-                )
-                self.clientSheetShown = true
-            }
-        }
-    }
-    
-    private func fetchParticipants(classId: String) async throws -> [ClassParticipant] {
-        let db = Firestore.firestore()
-        let snapshot = try await db.collection("classes")
-            .document(classId)
-            .collection("participants")
-            .order(by: "registeredAt", descending: false)
-            .getDocuments()
-        
-        return snapshot.documents.compactMap { doc in
-            let data = doc.data()
-            guard let userId = data["userId"] as? String,
-                  let firstName = data["firstName"] as? String,
-                  let lastName = data["lastName"] as? String,
-                  let registeredAtTimestamp = data["registeredAt"] as? Timestamp else {
-                return nil
-            }
-            
-            return ClassParticipant(
-                id: doc.documentID,
-                userId: userId,
-                firstName: firstName,
-                lastName: lastName,
-                registeredAt: registeredAtTimestamp.dateValue()
-            )
-        }
-    }
-
-    private func shiftWeek(by delta: Int) {
-        let cal = Calendar.current
-        if let newDate = cal.date(byAdding: .day, value: 7 * delta, to: viewModel.selectedDate) {
-            withAnimation(.easeInOut) {
-                viewModel.selectedDate = newDate
-            }
-        }
-    }
-
-    // MARK: - Header (same as ScheduleView)
-    private var header: some View {
-        HStack(spacing: 12) {
-            avatarView
-                .frame(width: 36, height: 36)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(auth.trainerDisplayName ?? "My Schedule")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                if auth.isAuthenticated {
-                    Text("You")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .padding(.top, 8)
     }
 
     @ViewBuilder
@@ -254,160 +128,10 @@ struct DayScheduleView: View {
         }
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "calendar.badge.exclamationmark")
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(.secondary)
-            Text("No items for this day.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
-}
-
-private struct DayEventRow: View {
-    let slot: TrainerScheduleSlot
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Time badge
-            VStack(spacing: 4) {
-                Text(timeRange(slot))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(width: 84)
-
-            // Content card
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    if slot.isClass {
-                        Image(systemName: "figure.volleyball")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(slot.visualColor)
-                    } else {
-                        Circle()
-                            .fill(slot.visualColor)
-                            .frame(width: 8, height: 8)
-                    }
-                    Text(slot.displayTitle)
-                        .font(.subheadline.weight(.semibold))
-                    Spacer()
-                }
-
-                if slot.isClass {
-                    Text("Group Class")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } else if slot.isBooked, let name = slot.clientName {
-                    Text(name)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
-                Text(statusText(slot))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(12)
-            .background(RoundedRectangle(cornerRadius: 12).fill(slot.visualColor.opacity(0.08)))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12).stroke(slot.visualColor.opacity(0.25))
-            )
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(slot.displayTitle), \(timeRange(slot))")
-    }
-
-    private func timeRange(_ slot: TrainerScheduleSlot) -> String {
-        let fmt = DateFormatter()
-        fmt.dateStyle = .none
-        fmt.timeStyle = .short
-        return "\(fmt.string(from: slot.startTime)) – \(fmt.string(from: slot.endTime))"
-    }
-
-    private func statusText(_ slot: TrainerScheduleSlot) -> String {
-        if slot.isClass { return "Tap to view participants" }
-        if slot.isBooked { return "Booked" }
-        switch slot.status {
-        case .open: return "Open"
-        case .unavailable: return "Unavailable"
-        case .booked: return "Booked"
-        }
-    }
-}
-
-private struct ClientDetailSheet: View {
-    let client: Client
-
-    var body: some View {
-        VStack(spacing: 16) {
-            if let urlString = client.photoURL, let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 72, height: 72)
-                            .clipShape(Circle())
-                            .transition(.opacity)
-                    case .empty, .failure:
-                        Circle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(width: 72, height: 72)
-                            .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
-                    @unknown default:
-                        Circle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(width: 72, height: 72)
-                            .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
-                    }
-                }
-            } else {
-                Circle()
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(width: 72, height: 72)
-                    .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
-            }
-
-            VStack(spacing: 4) {
-                Text(client.fullName)
-                    .font(.title3.weight(.semibold))
-                if !client.emailAddress.isEmpty {
-                    Link(destination: URL(string: "mailto:\(client.emailAddress)")!) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "envelope.fill")
-                                .font(.system(size: 12))
-                            Text(client.emailAddress)
-                                .font(.subheadline)
-                        }
-                        .foregroundStyle(AppTheme.primary)
-                    }
-                }
-                if !client.phoneNumber.isEmpty {
-                    VStack(spacing: Spacing.xs) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "phone.fill")
-                                .font(.system(size: 12))
-                            Text(client.phoneNumber)
-                                .font(.subheadline)
-                        }
-                        .foregroundStyle(.secondary)
-                        
-                        InlinePhoneActions(phoneNumber: client.phoneNumber)
-                    }
-                    .padding(.top, Spacing.xxs)
-                }
-            }
-
-            Spacer()
-        }
-        .padding()
-        .presentationDragIndicator(.visible)
+    private func hourLabel(_ hour: Int) -> String {
+        let comps = DateComponents(calendar: Calendar.current, hour: hour)
+        let date = comps.date ?? Date()
+        return date.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)))
     }
 }
 
@@ -415,4 +139,3 @@ private struct ClientDetailSheet: View {
     DayScheduleView(viewModel: ScheduleViewModel())
         .environmentObject(AuthManager())
 }
-
