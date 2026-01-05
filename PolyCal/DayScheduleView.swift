@@ -11,6 +11,16 @@ import FirebaseFirestore
 struct DayScheduleView: View {
     @EnvironmentObject private var auth: AuthManager
     @ObservedObject var viewModel: ScheduleViewModel
+    
+    // Client detail sheet
+    @State private var selectedClient: Client?
+    @State private var clientSheetShown = false
+    
+    // Class participants sheet
+    @State private var selectedClassId: String?
+    @State private var selectedClassName: String?
+    @State private var preloadedParticipants: [ClassParticipant] = []
+    @State private var classParticipantsShown = false
 
     var body: some View {
         NavigationView {
@@ -65,14 +75,28 @@ struct DayScheduleView: View {
 
                             if let slot = matching.first {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(slot.displayTitle)
-                                        .font(.body)
-                                        .foregroundStyle(.primary)
+                                    HStack(spacing: 4) {
+                                        if slot.isClass {
+                                            Image(systemName: "figure.volleyball")
+                                                .font(.caption.weight(.semibold))
+                                                .foregroundStyle(slot.visualColor)
+                                        } else {
+                                            Circle()
+                                                .fill(slot.visualColor)
+                                                .frame(width: 8, height: 8)
+                                        }
+                                        Text(slot.displayTitle)
+                                            .font(.body)
+                                            .foregroundStyle(.primary)
+                                    }
                                     if slot.isBooked, let name = slot.clientName {
                                         Text(name)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
+                                }
+                                .onTapGesture {
+                                    handleSlotTap(slot)
                                 }
                             } else {
                                 Text("No events")
@@ -94,6 +118,136 @@ struct DayScheduleView: View {
                         .font(.headline)
                 }
             }
+            .sheet(isPresented: $clientSheetShown, onDismiss: {
+                selectedClient = nil
+            }, content: {
+                if let client = selectedClient {
+                    ClientDetailSheet(client: client)
+                        .presentationDetents([.medium, .large])
+                } else {
+                    ProgressView("Loading…")
+                        .padding()
+                }
+            })
+            .sheet(isPresented: $classParticipantsShown) {
+                if let classId = selectedClassId, let className = selectedClassName {
+                    ClassParticipantsView(
+                        classId: classId,
+                        classTitle: className,
+                        preloadedParticipants: preloadedParticipants
+                    )
+                }
+            }
+        }
+    }
+    
+    private func handleSlotTap(_ slot: TrainerScheduleSlot) {
+        // Check if this is a class booking
+        if slot.isClass, let classId = slot.classId {
+            selectedClassId = classId
+            selectedClassName = slot.clientName ?? "Group Class"
+            
+            // Use cached participants if available
+            if let cached = viewModel.participantsByClassId[classId] {
+                self.preloadedParticipants = cached
+                self.classParticipantsShown = true
+            } else {
+                // Show empty for now if not cached
+                self.preloadedParticipants = []
+                self.classParticipantsShown = true
+            }
+            return
+        }
+        
+        // Handle regular client booking
+        if slot.isBooked, let clientId = slot.clientId {
+            // Check cache first
+            if let cached = viewModel.clientsById[clientId] {
+                self.selectedClient = cached
+                self.clientSheetShown = true
+            } else {
+                // Show placeholder if not cached
+                self.selectedClient = Client(
+                    id: clientId,
+                    firstName: slot.clientName ?? "Booked",
+                    lastName: "",
+                    emailAddress: "",
+                    phoneNumber: "",
+                    photoURL: nil
+                )
+                self.clientSheetShown = true
+            }
+        }
+    }
+    
+    private struct ClientDetailSheet: View {
+        let client: Client
+
+        var body: some View {
+            VStack(spacing: 16) {
+                if let urlString = client.photoURL, let url = URL(string: urlString) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 72, height: 72)
+                                .clipShape(Circle())
+                                .transition(.opacity)
+                        case .empty, .failure:
+                            Circle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(width: 72, height: 72)
+                                .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
+                        @unknown default:
+                            Circle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(width: 72, height: 72)
+                                .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
+                        }
+                    }
+                } else {
+                    Circle()
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(width: 72, height: 72)
+                        .overlay(Image(systemName: "person.crop.circle.fill").font(.system(size: 36)).foregroundStyle(.secondary))
+                }
+
+                VStack(spacing: 4) {
+                    Text(client.fullName)
+                        .font(.title3.weight(.semibold))
+                    if !client.emailAddress.isEmpty {
+                        Link(destination: URL(string: "mailto:\(client.emailAddress)")!) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "envelope.fill")
+                                    .font(.system(size: 12))
+                                Text(client.emailAddress)
+                                    .font(.subheadline)
+                            }
+                            .foregroundStyle(AppTheme.primary)
+                        }
+                    }
+                    if !client.phoneNumber.isEmpty {
+                        VStack(spacing: Spacing.xs) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "phone.fill")
+                                    .font(.system(size: 12))
+                                Text(client.phoneNumber)
+                                    .font(.subheadline)
+                            }
+                            .foregroundStyle(.secondary)
+                            
+                            InlinePhoneActions(phoneNumber: client.phoneNumber)
+                        }
+                        .padding(.top, Spacing.xxs)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding()
+            .presentationDragIndicator(.visible)
         }
     }
 

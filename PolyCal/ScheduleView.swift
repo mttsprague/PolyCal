@@ -368,12 +368,20 @@ struct ScheduleView: View {
             selectedClassId = classId
             selectedClassName = slot.clientName ?? "Group Class"
             
-            // Pre-load participants BEFORE showing sheet
+            // Use cached participants if available
+            if let cached = viewModel.participantsByClassId[classId] {
+                self.preloadedParticipants = cached
+                self.classParticipantsShown = true
+                return
+            }
+            
+            // Fallback: Pre-load participants if not in cache (shouldn't happen normally)
             Task {
                 do {
                     let participants = try await fetchParticipants(classId: classId)
                     await MainActor.run {
                         self.preloadedParticipants = participants
+                        viewModel.participantsByClassId[classId] = participants
                         self.classParticipantsShown = true
                     }
                 } catch {

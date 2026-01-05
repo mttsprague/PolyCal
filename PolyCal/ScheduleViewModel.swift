@@ -8,6 +8,7 @@
 import SwiftUI
 import Foundation
 import Combine
+import FirebaseFirestore
 
 enum ScheduleMode: Equatable {
     case myWeek
@@ -37,6 +38,9 @@ final class ScheduleViewModel: ObservableObject {
 
     // Client cache for instant presentation
     @Published var clientsById: [String: Client] = [:]
+    
+    // Class participants cache for instant presentation
+    @Published var participantsByClassId: [String: [ClassParticipant]] = [:]
 
     private let scheduleRepo = ScheduleRepository()
 
@@ -126,6 +130,9 @@ final class ScheduleViewModel: ObservableObject {
 
             // Prefetch clients for all booked slots in this week
             await prefetchClientsForVisibleWeek()
+            
+            // Prefetch class participants for all class bookings in this week
+            await prefetchClassParticipantsForVisibleWeek()
         } catch {
             self.slotsByDay = [:]
         }
@@ -160,6 +167,65 @@ final class ScheduleViewModel: ObservableObject {
         // Merge into cache
         for (id, client) in fetched {
             clientsById[id] = client
+        }
+    }
+    
+    // MARK: - Prefetch class participants for instant sheet presentation
+    func prefetchClassParticipantsForVisibleWeek() async {
+        // Collect unique class IDs from class bookings
+        let allClassIds = Set(slotsByDay.values.flatMap { daySlots in
+            daySlots.compactMap { $0.isClass ? $0.classId : nil }
+        })
+        // Skip any already cached
+        let missing = allClassIds.subtracting(participantsByClassId.keys)
+        guard !missing.isEmpty else { return }
+
+        // Fetch concurrently off the main actor
+        var fetched: [String: [ClassParticipant]] = [:]
+        await withTaskGroup(of: (String, [ClassParticipant]?).self) { group in
+            for classId in missing {
+                group.addTask {
+                    let participants = try? await self.fetchParticipants(classId: classId)
+                    return (classId, participants)
+                }
+            }
+            for await (classId, participants) in group {
+                if let participants {
+                    fetched[classId] = participants
+                }
+            }
+        }
+
+        // Merge into cache
+        for (classId, participants) in fetched {
+            participantsByClassId[classId] = participants
+        }
+    }
+    
+    private func fetchParticipants(classId: String) async throws -> [ClassParticipant] {
+        let db = Firestore.firestore()
+        let snapshot = try await db.collection("classes")
+            .document(classId)
+            .collection("participants")
+            .order(by: "registeredAt", descending: false)
+            .getDocuments()
+        
+        return snapshot.documents.compactMap { doc in
+            let data = doc.data()
+            guard let userId = data["userId"] as? String,
+                  let firstName = data["firstName"] as? String,
+                  let lastName = data["lastName"] as? String,
+                  let registeredAtTimestamp = data["registeredAt"] as? Timestamp else {
+                return nil
+            }
+            
+            return ClassParticipant(
+                id: doc.documentID,
+                userId: userId,
+                firstName: firstName,
+                lastName: lastName,
+                registeredAt: registeredAtTimestamp.dateValue()
+            )
         }
     }
 
