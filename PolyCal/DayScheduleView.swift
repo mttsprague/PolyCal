@@ -112,27 +112,31 @@ struct DayScheduleView: View {
         // Otherwise handle regular client booking
         guard slot.isBooked, let clientId = slot.clientId else { return }
 
-        // 1) Present immediately from cache or placeholder
+        // 1) Check cache first
         if let cached = viewModel.clientsById[clientId] {
             self.selectedClient = cached
-        } else {
-            self.selectedClient = Client(
-                id: clientId,
-                firstName: slot.clientName ?? "Booked",
-                lastName: "",
-                emailAddress: "",
-                phoneNumber: "",
-                photoURL: nil
-            )
+            self.clientSheetShown = true
+            return
         }
-        self.clientSheetShown = true
 
-        // 2) Fetch in background and update when ready
+        // 2) Fetch data BEFORE showing sheet
         let fetched = try? await FirestoreService.shared.fetchClient(by: clientId)
         await MainActor.run {
             if let client = fetched {
                 self.selectedClient = client
                 viewModel.clientsById[clientId] = client
+                self.clientSheetShown = true
+            } else {
+                // Fallback to placeholder if fetch fails
+                self.selectedClient = Client(
+                    id: clientId,
+                    firstName: slot.clientName ?? "Booked",
+                    lastName: "",
+                    emailAddress: "",
+                    phoneNumber: "",
+                    photoURL: nil
+                )
+                self.clientSheetShown = true
             }
         }
     }
