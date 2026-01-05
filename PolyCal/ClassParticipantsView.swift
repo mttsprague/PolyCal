@@ -52,6 +52,13 @@ struct ClassParticipantsView: View {
                 }
             }
         }
+        .onAppear {
+            if participantsLoader.participants.isEmpty && !participantsLoader.isLoading {
+                Task {
+                    await participantsLoader.loadParticipants(classId: classId)
+                }
+            }
+        }
         .task {
             await participantsLoader.loadParticipants(classId: classId)
         }
