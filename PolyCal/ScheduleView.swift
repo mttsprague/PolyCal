@@ -19,6 +19,15 @@ struct ScheduleView: View {
         let hour: Int
     }
     @State private var editorContext: EditorContext?
+    
+    // Class sheet presentation with identifiable item
+    private struct ClassSheetContext: Identifiable {
+        let id = UUID()
+        let classId: String
+        let className: String
+        let participants: [ClassParticipant]?
+    }
+    @State private var classSheetContext: ClassSheetContext?
 
     // Options menu
     @State private var showOptions = false
@@ -30,12 +39,7 @@ struct ScheduleView: View {
     // Client detail sheet
     @State private var selectedClient: Client?
     @State private var clientSheetShown = false
-    
-    // Class participants sheet
-    @State private var selectedClassId: String?
-    @State private var selectedClassName: String?
-    @State private var preloadedParticipants: [ClassParticipant]?
-    @State private var classParticipantsShown = false
+
 
     // Layout constants
     private let rowHeight: CGFloat = 32
@@ -246,28 +250,12 @@ struct ScheduleView: View {
                         .padding()
                 }
             })
-            .sheet(isPresented: $classParticipantsShown) {
-                let _ = print("DEBUG SHEET: classId=\(selectedClassId ?? "nil"), className=\(selectedClassName ?? "nil"), participants=\(preloadedParticipants?.count ?? -1)")
-                if let classId = selectedClassId, let className = selectedClassName {
-                    ClassParticipantsView(
-                        classId: classId, 
-                        classTitle: className,
-                        preloadedParticipants: preloadedParticipants
-                    )
-                } else {
-                    // Fallback in case of nil values
-                    VStack {
-                        Text("Loading class details...")
-                        ProgressView()
-                        Text("ClassId: \(selectedClassId ?? "nil")")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text("ClassName: \(selectedClassName ?? "nil")")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
+            .sheet(item: $classSheetContext) { context in
+                ClassParticipantsView(
+                    classId: context.classId,
+                    classTitle: context.className,
+                    preloadedParticipants: context.participants
+                )
             }
         }
     }
@@ -385,14 +373,12 @@ struct ScheduleView: View {
             // Use cached participants if available
             if let cached = viewModel.participantsByClassId[classId] {
                 print("DEBUG: Using cached participants: \(cached.count) participants")
-                // Set all state together
-                self.selectedClassId = classId
-                self.selectedClassName = slot.clientName ?? "Group Class"
-                self.preloadedParticipants = cached
-                // Delay showing sheet slightly to ensure state updates propagate
-                DispatchQueue.main.async {
-                    self.classParticipantsShown = true
-                }
+                // Present sheet with context item
+                self.classSheetContext = ClassSheetContext(
+                    classId: classId,
+                    className: slot.clientName ?? "Group Class",
+                    participants: cached
+                )
                 return
             }
             
@@ -403,16 +389,22 @@ struct ScheduleView: View {
                 do {
                     let participants = try await fetchParticipants(classId: classId)
                     await MainActor.run {
-                        self.preloadedParticipants = participants
                         viewModel.participantsByClassId[classId] = participants
-                        self.classParticipantsShown = true
+                        self.classSheetContext = ClassSheetContext(
+                            classId: classId,
+                            className: slot.clientName ?? "Group Class",
+                            participants: participants
+                        )
                     }
                 } catch {
                     print("Error loading participants: \(error)")
                     await MainActor.run {
                         // Show sheet anyway with empty participants list
-                        self.preloadedParticipants = []
-                        self.classParticipantsShown = true
+                        self.classSheetContext = ClassSheetContext(
+                            classId: classId,
+                            className: slot.clientName ?? "Group Class",
+                            participants: []
+                        )
                     }
                 }
             }
