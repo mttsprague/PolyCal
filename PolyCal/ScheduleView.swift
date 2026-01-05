@@ -33,6 +33,7 @@ struct ScheduleView: View {
     // Class participants sheet
     @State private var selectedClassId: String?
     @State private var selectedClassName: String?
+    @State private var preloadedParticipants: [ClassParticipant] = []
     @State private var classParticipantsShown = false
 
     // Layout constants
@@ -246,7 +247,11 @@ struct ScheduleView: View {
             })
             .sheet(isPresented: $classParticipantsShown) {
                 if let classId = selectedClassId, let className = selectedClassName {
-                    ClassParticipantsView(classId: classId, classTitle: className)
+                    ClassParticipantsView(
+                        classId: classId, 
+                        classTitle: className,
+                        preloadedParticipants: preloadedParticipants
+                    )
                 }
             }
         }
@@ -361,7 +366,24 @@ struct ScheduleView: View {
         if slot.isClass, let classId = slot.classId {
             selectedClassId = classId
             selectedClassName = slot.clientName ?? "Group Class"
-            classParticipantsShown = true
+            
+            // Pre-load participants BEFORE showing sheet
+            Task {
+                do {
+                    let participants = try await fetchParticipants(classId: classId)
+                    await MainActor.run {
+                        self.preloadedParticipants = participants
+                        self.classParticipantsShown = true
+                    }
+                } catch {
+                    print("Error loading participants: \(error)")
+                    await MainActor.run {
+                        // Show sheet anyway with empty participants list
+                        self.preloadedParticipants = []
+                        self.classParticipantsShown = true
+                    }
+                }
+            }
             return
         }
         
@@ -399,6 +421,33 @@ struct ScheduleView: View {
         } else {
             // Drive the sheet with an Identifiable item so init sees the correct values
             editorContext = EditorContext(day: defaultDay, hour: defaultHour)
+        }
+    }
+    
+    private func fetchParticipants(classId: String) async throws -> [ClassParticipant] {
+        let db = Firestore.firestore()
+        let snapshot = try await db.collection("classes")
+            .document(classId)
+            .collection("participants")
+            .order(by: "registeredAt", descending: false)
+            .getDocuments()
+        
+        return snapshot.documents.compactMap { doc in
+            let data = doc.data()
+            guard let userId = data["userId"] as? String,
+                  let firstName = data["firstName"] as? String,
+                  let lastName = data["lastName"] as? String,
+                  let registeredAtTimestamp = data["registeredAt"] as? Timestamp else {
+                return nil
+            }
+            
+            return ClassParticipant(
+                id: doc.documentID,
+                userId: userId,
+                firstName: firstName,
+                lastName: lastName,
+                registeredAt: registeredAtTimestamp.dateValue()
+            )
         }
     }
 

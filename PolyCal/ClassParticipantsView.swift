@@ -12,14 +12,16 @@ import Combine
 struct ClassParticipantsView: View {
     let classId: String
     let classTitle: String
+    let preloadedParticipants: [ClassParticipant]?
     
     @StateObject private var participantsLoader: ParticipantsLoader
     @Environment(\.dismiss) private var dismiss
     
-    init(classId: String, classTitle: String) {
+    init(classId: String, classTitle: String, preloadedParticipants: [ClassParticipant]? = nil) {
         self.classId = classId
         self.classTitle = classTitle
-        _participantsLoader = StateObject(wrappedValue: ParticipantsLoader(classId: classId))
+        self.preloadedParticipants = preloadedParticipants
+        _participantsLoader = StateObject(wrappedValue: ParticipantsLoader(classId: classId, preloadedParticipants: preloadedParticipants))
     }
     
     var body: some View {
@@ -130,10 +132,18 @@ class ParticipantsLoader: ObservableObject {
     private let db = Firestore.firestore()
     private let classId: String
     
-    init(classId: String) {
+    init(classId: String, preloadedParticipants: [ClassParticipant]? = nil) {
         self.classId = classId
-        Task {
-            await loadParticipants()
+        
+        if let preloaded = preloadedParticipants {
+            // Use preloaded data immediately
+            self.participants = preloaded
+            self.isLoading = false
+        } else {
+            // Load data
+            Task {
+                await loadParticipants()
+            }
         }
     }
     
