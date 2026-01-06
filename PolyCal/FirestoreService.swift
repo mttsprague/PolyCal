@@ -545,6 +545,16 @@ final class FirestoreService {
             "lessonsUsed": FieldValue.increment(Int64(1))
         ], forDocument: packageRef)
         
+        print("🔵 Updating slot status to booked")
+        // 7. Update the slot to show it's booked
+        batch.updateData([
+            "status": "booked",
+            "clientId": clientIdCopy,
+            "clientName": clientName,
+            "bookedAt": Timestamp(date: Date()),
+            "updatedAt": Timestamp(date: Date())
+        ], forDocument: slotRef)
+        
         print("🔵 Committing batch")
         // Commit all changes atomically
         try await batch.commit()
