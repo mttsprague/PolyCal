@@ -474,47 +474,49 @@ final class FirestoreService {
     // MARK: - Admin Booking
     func adminBookLesson(trainerId: String, slotId: String, clientId: String, packageId: String) async throws {
         #if canImport(FirebaseFirestore)
+        print("🔵 adminBookLesson: Start")
         let db = Firestore.firestore()
-        let batch = db.batch()
         
-        // 1. Get the slot reference
+        print("🔵 Getting slot")
+        // 1. Get the slot reference and data
         let slotRef = db.collection("trainers")
             .document(trainerId)
             .collection("schedules")
             .document(slotId)
         
-        // Get slot data to extract times
         let slotSnap = try await slotRef.getDocument()
         guard let slotData = slotSnap.data(),
               let startTs = slotData["startTime"] as? Timestamp,
               let endTs = slotData["endTime"] as? Timestamp else {
+            print("❌ Failed to get slot data")
             throw FirestoreServiceError.decoding
         }
+        print("✅ Got slot data")
         
+        print("🔵 Getting trainer name")
         // 2. Get trainer name
         let trainerSnap = try await db.collection("trainers").document(trainerId).getDocument()
         let trainerName = trainerSnap.data()?["name"] as? String ?? "Trainer"
+        print("✅ Got trainer name: \(trainerName)")
         
-        // 3. Get client name
-        let clientSnap = try await db.collection("users").document(clientId).getDocument()
+        print("🔵 Getting client name")
+        // 3. Get client name - create a local copy to avoid corruption
+        let clientIdCopy = String(clientId)
+        let clientRef = db.collection("users").document(clientIdCopy)
+        let clientSnap = try await clientRef.getDocument()
         let clientData = clientSnap.data() ?? [:]
         let firstName = clientData["firstName"] as? String ?? ""
         let lastName = clientData["lastName"] as? String ?? ""
         let clientName = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
+        print("✅ Got client name: \(clientName)")
         
-        // 4. Update the slot to booked status with client info
-        batch.updateData([
-            "status": "booked",
-            "clientId": clientId,
-            "clientName": clientName,
-            "bookedAt": Timestamp(date: Date()),
-            "updatedAt": Timestamp(date: Date())
-        ], forDocument: slotRef)
-        
+        print("🔵 Creating batch")
+        print("🔵 Adding booking to batch")
         // 5. Create the booking document with all required fields
         let bookingRef = db.collection("bookings").document()
+        let packageIdCopy = String(packageId)
         batch.setData([
-            "clientUID": clientId,
+            "clientUID": clientIdCopy,
             "clientName": clientName,
             "trainerUID": trainerId,
             "trainerId": trainerId,
@@ -523,19 +525,28 @@ final class FirestoreService {
             "endTime": endTs,
             "status": "confirmed",
             "bookedAt": Timestamp(date: Date()),
-            "packageId": packageId,
-            "lessonPackageId": packageId,
+            "packageId": packageIdCopy,
+            "lessonPackageId": packageIdCopy,
             "scheduleSlotId": slotId,
             "slotId": slotId
         ], forDocument: bookingRef)
         
+        print("🔵 Adding package update to batch")
         // 6. Increment the package lessons used
         let packageRef = db.collection("users")
-            .document(clientId)
+            .document(clientIdCopy)
             .collection("lessonPackages")
-            .document(packageId)
+            .document(packageIdCopy)
         
         batch.updateData([
+            "lessonsUsed": FieldValue.increment(Int64(1))
+        ], forDocument: packageRef)
+        
+        print("🔵 Committing batch")
+        // Commit all changes atomically
+        try await batch.commit()
+        
+        print("✅ Admin booking created successfully
             "lessonsUsed": FieldValue.increment(Int64(1))
         ], forDocument: packageRef)
         
