@@ -242,19 +242,14 @@ struct ScheduleView: View {
                     },
                     onBookLesson: { clientId, startTime, endTime, packageId in
                         print("📋 ScheduleView: Received booking request")
-                        Task {
-                            print("📋 ScheduleView: Calling bookLessonForClient...")
-                            await viewModel.bookLessonForClient(
-                                clientId: clientId,
-                                startTime: startTime,
-                                endTime: endTime,
-                                packageId: packageId
-                            )
-                            print("📋 ScheduleView: Booking complete, clearing editorContext")
-                            await MainActor.run {
-                                editorContext = nil
-                            }
-                        }
+                        let success = await viewModel.bookLessonForClient(
+                            clientId: clientId,
+                            startTime: startTime,
+                            endTime: endTime,
+                            packageId: packageId
+                        )
+                        print("📋 ScheduleView: Booking \(success ? "succeeded" : "failed")")
+                        return success
                     }
                 )
                 .presentationDetents([.medium, .large])

@@ -349,7 +349,7 @@ final class ScheduleViewModel: ObservableObject {
     }
     
     // Admin function to book a lesson for a client
-    func bookLessonForClient(clientId: String, startTime: Date, endTime: Date, packageId: String) async {
+    func bookLessonForClient(clientId: String, startTime: Date, endTime: Date, packageId: String) async -> Bool {
         print("🎯 ScheduleViewModel: bookLessonForClient called")
         print("   - trainerId: \(editingTrainerId ?? "nil")")
         print("   - clientId: \(clientId)")
@@ -358,7 +358,7 @@ final class ScheduleViewModel: ObservableObject {
         
         guard let trainerId = editingTrainerId else {
             print("❌ No trainer selected for booking")
-            return
+            return false
         }
         
         do {
@@ -381,7 +381,7 @@ final class ScheduleViewModel: ObservableObject {
             
             guard let slot = slots.first(where: { $0.startTime == startTime }) else {
                 print("❌ Failed to find created slot")
-                return
+                return false
             }
             
             print("🎯 Step 3: Booking with slotId: \(slot.id)")
@@ -395,8 +395,10 @@ final class ScheduleViewModel: ObservableObject {
             
             print("✅ Successfully booked lesson for client")
             await loadWeek()
+            return true
         } catch {
             print("❌ Failed to book lesson for client: \(error)")
+            return false
         }
     }
 

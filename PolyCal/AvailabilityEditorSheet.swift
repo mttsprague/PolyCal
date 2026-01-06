@@ -14,7 +14,7 @@ struct AvailabilityEditorSheet: View {
     let editingTrainerId: String?
     let onSaveSingle: (Date, Date, Date, TrainerScheduleSlot.Status) -> Void
     let onSaveOngoing: (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void
-    let onBookLesson: (String, Date, Date, String) -> Void // clientId, startTime, endTime, packageId
+    let onBookLesson: (String, Date, Date, String) async -> Bool // clientId, startTime, endTime, packageId -> success
 
     @Environment(\.dismiss) private var dismiss
 
@@ -44,6 +44,7 @@ struct AvailabilityEditorSheet: View {
     @State private var selectedPackageId: String?
     @State private var isLoadingClients: Bool = false
     @State private var isLoadingPackages: Bool = false
+    @State private var isBooking: Bool = false
     @State private var bookingError: String?
 
     init(
@@ -53,7 +54,7 @@ struct AvailabilityEditorSheet: View {
         editingTrainerId: String? = nil,
         onSaveSingle: @escaping (Date, Date, Date, TrainerScheduleSlot.Status) -> Void,
         onSaveOngoing: @escaping (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void,
-        onBookLesson: @escaping (String, Date, Date, String) -> Void = { _, _, _, _ in }
+        onBookLesson: @escaping (String, Date, Date, String) async -> Bool = { _, _, _, _ in false }
     ) {
         self.defaultDay = defaultDay
         self.defaultHour = defaultHour
@@ -301,16 +302,25 @@ struct AvailabilityEditorSheet: View {
                     
                     // Book button
                     Button {
-                        bookLesson()
+                        Task {
+                            await bookLesson()
+                        }
                     } label: {
-                        Text("Book Lesson")
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(canBookLesson ? Color.accentColor : Color.gray)
-                            .foregroundStyle(.white)
-                            .cornerRadius(10)
+                        HStack {
+                            if isBooking {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                            }
+                            Text(isBooking ? "Booking..." : "Book Lesson")
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background((canBookLesson && !isBooking) ? Color.accentColor : Color.gray)
+                        .foregroundStyle(.white)
+                        .cornerRadius(10)
                     }
-                    .disabled(!canBookLesson)
+                    .disabled(!canBookLesson || isBooking)
                     
                     if let error = bookingError {
                         Text(error)
@@ -333,7 +343,8 @@ struct AvailabilityEditorSheet: View {
               let packageId = selectedPackageId,
               !clientId.isEmpty,
               !packageId.isEmpty,
-              singleEnd > singleStart else {
+              singleEnd > singleStart,
+              !isBooking else {
             return false
         }
         return true
@@ -383,7 +394,7 @@ struct AvailabilityEditorSheet: View {
         }
     }
     
-    private func bookLesson() {
+    private func bookLesson() async {
         guard let clientId = selectedClientId,
               let packageId = selectedPackageId else {
             bookingError = "Please select a client and package"
@@ -396,13 +407,21 @@ struct AvailabilityEditorSheet: View {
         print("   - startTime: \(singleStart)")
         print("   - endTime: \(singleEnd)")
         
+        isBooking = true
         bookingError = nil
         
-        // Call the booking function and let it handle dismissal
-        onBookLesson(clientId, singleStart, singleEnd, packageId)
+        // Call the async booking function and wait for result
+        let success = await onBookLesson(clientId, singleStart, singleEnd, packageId)
         
-        // Don't dismiss immediately - let the parent handle dismissal after booking completes
-        print("📝 AvailabilityEditorSheet: Booking request sent to parent")
+        isBooking = false
+        
+        if success {
+            print("📝 AvailabilityEditorSheet: Booking succeeded, dismissing sheet")
+            dismiss()
+        } else {
+            print("❌ AvailabilityEditorSheet: Booking failed")
+            bookingError = "Failed to book lesson. Please try again."
+        }
     }
 
     private var singleSaveDisabled: Bool {
