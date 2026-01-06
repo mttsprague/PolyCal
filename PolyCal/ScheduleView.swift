@@ -46,7 +46,7 @@ struct ScheduleView: View {
 
 
     // Layout constants
-    private let rowHeight: CGFloat = 56
+    private let rowHeight: CGFloat = 32
     private let rowVerticalPadding: CGFloat = 6
     private let timeColWidth: CGFloat = 56
     private let dayColumnWidth: CGFloat = 47
