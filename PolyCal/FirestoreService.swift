@@ -510,7 +510,10 @@ final class FirestoreService {
         let clientName = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
         print("✅ Got client name: \(clientName)")
         
+        // 4. Create a batch
         print("🔵 Creating batch")
+        let batch = db.batch()
+        
         print("🔵 Adding booking to batch")
         // 5. Create the booking document with all required fields
         let bookingRef = db.collection("bookings").document()
@@ -543,13 +546,6 @@ final class FirestoreService {
         ], forDocument: packageRef)
         
         print("🔵 Committing batch")
-        // Commit all changes atomically
-        try await batch.commit()
-        
-        print("✅ Admin booking created successfully
-            "lessonsUsed": FieldValue.increment(Int64(1))
-        ], forDocument: packageRef)
-        
         // Commit all changes atomically
         try await batch.commit()
         

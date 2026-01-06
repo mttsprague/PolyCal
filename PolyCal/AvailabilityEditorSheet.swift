@@ -14,7 +14,7 @@ struct AvailabilityEditorSheet: View {
     let editingTrainerId: String?
     let onSaveSingle: (Date, Date, Date, TrainerScheduleSlot.Status) -> Void
     let onSaveOngoing: (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void
-    let onBookLesson: (String, TimeInterval, TimeInterval, String) async -> Bool // clientId, startTime, endTime, packageId -> success
+    let onBookLesson: (String, TimeInterval, TimeInterval, String) -> Void // clientId, startTime, endTime, packageId
 
     @Environment(\.dismiss) private var dismiss
 
@@ -61,7 +61,7 @@ struct AvailabilityEditorSheet: View {
         editingTrainerId: String? = nil,
         onSaveSingle: @escaping (Date, Date, Date, TrainerScheduleSlot.Status) -> Void,
         onSaveOngoing: @escaping (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void,
-        onBookLesson: @escaping (String, TimeInterval, TimeInterval, String) async -> Bool = { _, _, _, _ in false }
+        onBookLesson: @escaping (String, TimeInterval, TimeInterval, String) -> Void = { _, _, _, _ in }
     ) {
         self.defaultDay = defaultDay
         self.defaultHour = defaultHour
@@ -449,18 +449,14 @@ struct AvailabilityEditorSheet: View {
         let startInterval = singleStart.timeIntervalSinceReferenceDate
         let endInterval = singleEnd.timeIntervalSinceReferenceDate
         
-        // Call the async booking function and wait for result
-        let success = await onBookLesson(clientId, startInterval, endInterval, packageId)
+        // Call the synchronous closure that will trigger async work
+        onBookLesson(clientId, startInterval, endInterval, packageId)
+        
+        // Wait a moment for booking to process
+        try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
         
         isBooking = false
-        
-        if success {
-            print("📝 AvailabilityEditorSheet: Booking succeeded, dismissing sheet")
-            dismiss()
-        } else {
-            print("❌ AvailabilityEditorSheet: Booking failed")
-            bookingError = "Failed to book lesson. Please try again."
-        }
+        dismiss()
     }
 
     private var singleSaveDisabled: Bool {

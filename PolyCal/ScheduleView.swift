@@ -242,16 +242,17 @@ struct ScheduleView: View {
                     },
                     onBookLesson: { clientId, startInterval, endInterval, packageId in
                         print("📋 ScheduleView: Received booking request")
-                        let startTime = Date(timeIntervalSinceReferenceDate: startInterval)
-                        let endTime = Date(timeIntervalSinceReferenceDate: endInterval)
-                        let success = await viewModel.bookLessonForClient(
-                            clientId: clientId,
-                            startTime: startTime,
-                            endTime: endTime,
-                            packageId: packageId
-                        )
-                        print("📋 ScheduleView: Booking \(success ? "succeeded" : "failed")")
-                        return success
+                        // Store parameters and trigger async booking in a Task
+                        Task {
+                            let startTime = Date(timeIntervalSinceReferenceDate: startInterval)
+                            let endTime = Date(timeIntervalSinceReferenceDate: endInterval)
+                            let _ = await viewModel.bookLessonForClient(
+                                clientId: clientId,
+                                startTime: startTime,
+                                endTime: endTime,
+                                packageId: packageId
+                            )
+                        }
                     }
                 )
                 .presentationDetents([.medium, .large])
