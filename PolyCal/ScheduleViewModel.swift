@@ -350,52 +350,45 @@ final class ScheduleViewModel: ObservableObject {
     
     // Admin function to book a lesson for a client
     func bookLessonForClient(clientId: String, startTime: Date, endTime: Date, packageId: String) async -> Bool {
-        print("🎯 ScheduleViewModel: bookLessonForClient called")
-        print("   - trainerId: \(editingTrainerId ?? "nil")")
-        print("   - clientId: \(clientId)")
-        print("   - startTime: \(startTime)")
-        print("   - endTime: \(endTime)")
-        print("   - packageId: \(packageId)")
+        print("🎯 START bookLessonForClient")
         
         guard let trainerId = editingTrainerId else {
-            print("❌ No trainer selected for booking")
+            print("❌ No trainer selected")
             return false
         }
         
+        print("🎯 trainerId: \(trainerId)")
+        print("🎯 clientId: \(clientId)")
+        print("🎯 packageId: \(packageId)")
+        
         do {
-            print("🎯 Step 1: Creating slot...")
-            // First, create the slot if it doesn't exist
+            print("🎯 Creating slot...")
             try await scheduleRepo.upsertSlot(
                 trainerId: trainerId,
                 startTime: startTime,
                 endTime: endTime,
                 status: .open
             )
-            print("🎯 Step 1: Slot created successfully")
+            print("✅ Slot created")
             
-            print("🎯 Step 2: Calculating slot ID...")
-            // Calculate the deterministic slot ID (same format as scheduleDocId)
             let slotId = generateScheduleDocId(for: startTime)
-            print("   - slotId: \(slotId)")
+            print("🎯 slotId: \(slotId)")
             
-            print("🎯 Step 3: Calling adminBookLesson...")
-            // Book the lesson using the admin booking function
+            print("🎯 Booking lesson...")
             try await FirestoreService.shared.adminBookLesson(
                 trainerId: trainerId,
                 slotId: slotId,
                 clientId: clientId,
                 packageId: packageId
             )
-            print("🎯 Step 3: adminBookLesson completed")
+            print("✅ Booking created")
             
-            print("✅ Successfully booked lesson for client")
-            print("🔄 Reloading week data...")
+            print("🔄 Reloading...")
             await loadWeek()
-            print("🔄 Week data reloaded")
+            print("✅ Complete")
             return true
         } catch {
-            print("❌ Failed to book lesson for client: \(error)")
-            print("❌ Error details: \(error.localizedDescription)")
+            print("❌ Error: \(error.localizedDescription)")
             return false
         }
     }
