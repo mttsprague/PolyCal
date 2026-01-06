@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct ClientCardView: View {
     let client: Client

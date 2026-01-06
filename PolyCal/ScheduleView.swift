@@ -476,7 +476,6 @@ struct ScheduleView: View {
                     
                     self.clientCardContext = ClientCardContext(client: client, booking: booking)
                 }
-                }
             }
         } else {
             // Drive the sheet with an Identifiable item so init sees the correct values

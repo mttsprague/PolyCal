@@ -24,6 +24,7 @@ struct DayScheduleView: View {
     @State private var selectedClassId: String?
     @State private var selectedClassName: String?
     @State private var preloadedParticipants: [ClassParticipant]?
+    @State private var classParticipantsShown: Bool = false
 
     var body: some View {
         NavigationView {

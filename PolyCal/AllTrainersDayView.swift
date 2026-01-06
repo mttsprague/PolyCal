@@ -25,6 +25,7 @@ struct AllTrainersDayView: View {
     @State private var selectedClassId: String?
     @State private var selectedClassName: String?
     @State private var preloadedParticipants: [ClassParticipant]?
+    @State private var classParticipantsShown: Bool = false
 
     // Layout constants (mirroring ScheduleView where sensible)
     private let rowHeight: CGFloat = 32
@@ -537,4 +538,3 @@ final class AllTrainersDayViewModel: ObservableObject {
     AllTrainersDayView(scheduleViewModel: ScheduleViewModel())
         .environmentObject(AuthManager())
 }
-

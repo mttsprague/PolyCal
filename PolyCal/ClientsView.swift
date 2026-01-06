@@ -184,17 +184,3 @@ private struct ClientRow: View {
         }
     }
 }
-
-// Extension to get initials from client name
-extension Client {
-    var initials: String {
-        let components = fullName.split(separator: " ")
-        if components.count >= 2 {
-            return String(components[0].prefix(1) + components[1].prefix(1)).uppercased()
-        } else if let first = components.first {
-            return String(first.prefix(2)).uppercased()
-        }
-        return "CL"
-    }
-}
-
