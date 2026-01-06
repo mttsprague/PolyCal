@@ -382,12 +382,15 @@ final class ScheduleViewModel: ObservableObject {
             )
             print("✅ Booked")
             
+            // Wait a moment for Firestore to propagate changes
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            
             print("🔄 Reload")
             await loadWeek()
             print("✅ Done")
             return true
         } catch {
-            print("❌ Err")
+            print("❌ Err: \\(error.localizedDescription)")
             return false
         }
     }

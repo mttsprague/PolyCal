@@ -199,7 +199,7 @@ struct AvailabilityEditorSheet: View {
             }
             
             Section {
-                // Package selector
+                // Package selector with grouped display
                 if let clientId = selectedClientId {
                     if isLoadingPackages {
                         HStack {
@@ -207,20 +207,38 @@ struct AvailabilityEditorSheet: View {
                             Text("Loading packages...")
                                 .foregroundStyle(.secondary)
                         }
-                    } else if clientPackages.isEmpty {
+                    } else if availablePackages.isEmpty {
                         Text("No available passes for this client")
                             .foregroundStyle(.secondary)
                             .font(.caption)
                     } else {
-                        Picker("Pass/Package", selection: $selectedPackageId) {
-                            Text("Select a pass...").tag(nil as String?)
-                            ForEach(availablePackages) { package in
-                                HStack {
-                                    Text(package.packageDisplayName)
-                                    Spacer()
-                                    Text("(\(package.lessonsRemaining) left)")
+                        VStack(alignment: .leading, spacing: 12) {
+                            // Show totals by type
+                            ForEach(["private", "2_athlete", "3_athlete", "class_pass"], id: \.self) { type in
+                                let count = totalPassesForType(type)
+                                if count > 0 {
+                                    HStack {
+                                        Text(packageTypeName(type))
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                        Spacer()
+                                        Text("\(count) available")
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                            .foregroundStyle(.primary)
+                                    }
                                 }
-                                .tag(Optional(package.id))
+                            }
+                            
+                            Divider()
+                            
+                            // Package picker
+                            Picker("Select Pass", selection: $selectedPackageId) {
+                                Text("Choose a pass...").tag(nil as String?)
+                                ForEach(availablePackages) { package in
+                                    Text("\(package.packageDisplayName) (\(package.lessonsRemaining) left)")
+                                        .tag(Optional(package.id))
+                                }
                             }
                         }
                     }
@@ -371,6 +389,24 @@ struct AvailabilityEditorSheet: View {
     
     private var availablePackages: [LessonPackage] {
         clientPackages.filter { !$0.isExpired && $0.lessonsRemaining > 0 }
+    }
+    
+    private var packagesByType: [String: [LessonPackage]] {
+        Dictionary(grouping: availablePackages) { $0.packageType }
+    }
+    
+    private func packageTypeName(_ type: String) -> String {
+        switch type {
+        case "private": return "Private Lesson Passes"
+        case "2_athlete": return "2-Athlete Passes"
+        case "3_athlete": return "3-Athlete Passes"
+        case "class_pass": return "Class Passes"
+        default: return type
+        }
+    }
+    
+    private func totalPassesForType(_ type: String) -> Int {
+        packagesByType[type]?.reduce(0) { $0 + $1.lessonsRemaining } ?? 0
     }
     
     private var canBookLesson: Bool {
