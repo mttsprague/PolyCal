@@ -126,6 +126,10 @@ struct ScheduleView: View {
                         ScrollView(.vertical, showsIndicators: true) {
                             HStack(spacing: 0) {
                                 VStack(spacing: 0) {
+                                    // Spacer to align with the fixed header above
+                                    Color.clear
+                                        .frame(height: headerRowHeight)
+                                    
                                     ForEach(viewModel.visibleHours, id: \.self) { hour in
                                         Text(hourLabel(hour))
                                             .font(.caption2)
@@ -144,6 +148,10 @@ struct ScheduleView: View {
                                 ScrollViewReader { scrollProxy in
                                     ScrollView(.horizontal, showsIndicators: true) {
                                         VStack(spacing: 0) {
+                                            // Spacer to align with the fixed header above
+                                            Color.clear
+                                                .frame(height: headerRowHeight)
+                                            
                                             ForEach(viewModel.visibleHours, id: \.self) { hour in
                                                 HStack(spacing: columnSpacing) {
                                                     ForEach(viewModel.weekDays, id: \.self) { day in
@@ -198,7 +206,7 @@ struct ScheduleView: View {
                                 .fill(Color.red)
                                 .frame(height: 2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .offset(x: 0, y: y)
+                                .offset(x: 0, y: headerRowHeight + y)
                                 .accessibilityHidden(true)
                         }
                     }
