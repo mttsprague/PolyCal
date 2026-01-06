@@ -75,75 +75,80 @@ struct ScheduleView: View {
                 .padding(.top, 2)
                 .padding(.bottom, 4)
 
-                ZStack(alignment: .topLeading) {
-                    ScrollViewReader { verticalScrollProxy in
-                        ScrollView(.vertical, showsIndicators: true) {
-                            HStack(spacing: 0) {
-                                VStack(spacing: 0) {
-                                    ForEach(viewModel.visibleHours, id: \.self) { hour in
-                                        Text(hourLabel(hour))
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                            .frame(maxWidth: .infinity, alignment: .trailing)
-                                            .padding(.trailing, 6)
-                                            .frame(height: rowHeight)
-                                            .background(Color(UIColor.systemGray6))
-                                            .padding(.vertical, rowVerticalPadding)
-                                            .id("hour-\(hour)")
-                                    }
-                                }
-                                .frame(width: timeColWidth)
-                                .background(Color(UIColor.systemGray6))
-
-                                HStack(spacing: columnSpacing) {
-                                    ForEach(viewModel.weekDays, id: \.self) { day in
-                                        VStack(spacing: 0) {
-                                            ForEach(viewModel.visibleHours, id: \.self) { hour in
-                                                HourDayCell(
-                                                    day: day,
-                                                    hour: hour,
-                                                    slotsForDay: viewModel.slotsByDay[DateOnly(day)] ?? [],
-                                                    dayColumnWidth: dayColumnWidth,
-                                                    rowHeight: rowHeight,
-                                                    horizontalPadding: 6,
-                                                    onEmptyTap: {
-                                                        editorContext = EditorContext(day: day, hour: hour)
-                                                    },
-                                                    onSlotTap: { slot in
-                                                        handleSlotTap(slot, defaultDay: day, defaultHour: hour)
-                                                    },
-                                                    onSetStatus: { status in
-                                                        Task { await viewModel.setSlotStatus(on: day, hour: hour, status: status) }
-                                                    },
-                                                    onClear: {
-                                                        Task { await viewModel.clearSlot(on: day, hour: hour) }
-                                                    }
-                                                )
+                GeometryReader { geometry in
+                    let availableWidth = geometry.size.width - timeColWidth
+                    let calculatedDayWidth = availableWidth / 7
+                    
+                    ZStack(alignment: .topLeading) {
+                        ScrollViewReader { verticalScrollProxy in
+                            ScrollView(.vertical, showsIndicators: true) {
+                                HStack(spacing: 0) {
+                                    VStack(spacing: 0) {
+                                        ForEach(viewModel.visibleHours, id: \.self) { hour in
+                                            Text(hourLabel(hour))
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                                .frame(maxWidth: .infinity, alignment: .trailing)
+                                                .padding(.trailing, 6)
+                                                .frame(height: rowHeight)
+                                                .background(Color(UIColor.systemGray6))
                                                 .padding(.vertical, rowVerticalPadding)
+                                                .id("hour-\(hour)")
+                                        }
+                                    }
+                                    .frame(width: timeColWidth)
+                                    .background(Color(UIColor.systemGray6))
+
+                                    HStack(spacing: columnSpacing) {
+                                        ForEach(viewModel.weekDays, id: \.self) { day in
+                                            VStack(spacing: 0) {
+                                                ForEach(viewModel.visibleHours, id: \.self) { hour in
+                                                    HourDayCell(
+                                                        day: day,
+                                                        hour: hour,
+                                                        slotsForDay: viewModel.slotsByDay[DateOnly(day)] ?? [],
+                                                        dayColumnWidth: calculatedDayWidth,
+                                                        rowHeight: rowHeight,
+                                                        horizontalPadding: 6,
+                                                        onEmptyTap: {
+                                                            editorContext = EditorContext(day: day, hour: hour)
+                                                        },
+                                                        onSlotTap: { slot in
+                                                            handleSlotTap(slot, defaultDay: day, defaultHour: hour)
+                                                        },
+                                                        onSetStatus: { status in
+                                                            Task { await viewModel.setSlotStatus(on: day, hour: hour, status: status) }
+                                                        },
+                                                        onClear: {
+                                                            Task { await viewModel.clearSlot(on: day, hour: hour) }
+                                                        }
+                                                    )
+                                                    .padding(.vertical, rowVerticalPadding)
+                                                }
                                             }
                                         }
                                     }
+                                    .padding(.bottom, 8)
                                 }
-                                .padding(.bottom, 8)
+                            }
+                            .background(Color(UIColor.systemGray6))
+                            .onAppear {
+                                scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
                             }
                         }
-                        .background(Color(UIColor.systemGray6))
-                        .onAppear {
-                            scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
-                        }
-                    }
 
-                    TimelineView(.everyMinute) { context in
-                        if let y = currentTimeYOffset(for: context.date,
-                                                      firstHour: viewModel.visibleHours.first,
-                                                      rowHeight: rowHeight,
-                                                      rowVerticalPadding: rowVerticalPadding) {
-                            Rectangle()
-                                .fill(Color.red)
-                                .frame(height: 2)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .offset(x: 0, y: y)
-                                .accessibilityHidden(true)
+                        TimelineView(.everyMinute) { context in
+                            if let y = currentTimeYOffset(for: context.date,
+                                                          firstHour: viewModel.visibleHours.first,
+                                                          rowHeight: rowHeight,
+                                                          rowVerticalPadding: rowVerticalPadding) {
+                                Rectangle()
+                                    .fill(Color.red)
+                                    .frame(height: 2)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .offset(x: 0, y: y)
+                                    .accessibilityHidden(true)
+                            }
                         }
                     }
                 }

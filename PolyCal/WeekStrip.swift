@@ -47,7 +47,11 @@ struct WeekStrip: View {
             .padding(.horizontal)
 
             // Evenly spaced 7-day row (no scroll)
-            HStack(spacing: 12) {
+            HStack(spacing: 0) {
+                // Leading space to align with time column
+                Color.clear
+                    .frame(width: 56)
+                
                 ForEach(weekDays, id: \.self) { day in
                     DayPill(
                         date: day,
@@ -62,7 +66,6 @@ struct WeekStrip: View {
                     }
                 }
             }
-            .padding(.horizontal)
         }
     }
 }
