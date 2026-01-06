@@ -149,29 +149,28 @@ struct ScheduleView: View {
                                                 HStack(spacing: columnSpacing) {
                                                     ForEach(viewModel.weekDays, id: \.self) { day in
                                                         HourDayCell(
-                                                                day: day,
-                                                                hour: hour,
-                                                                slotsForDay: viewModel.slotsByDay[DateOnly(day)] ?? [],
-                                                                dayColumnWidth: dayColumnWidth,
-                                                                rowHeight: rowHeight,
-                                                                horizontalPadding: 6,
-                                                                onEmptyTap: {
-                                                                    editorContext = EditorContext(day: day, hour: hour)
-                                                                },
-                                                                onSlotTap: { slot in
-                                                                    handleSlotTap(slot, defaultDay: day, defaultHour: hour)
-                                                                },
-                                                                onSetStatus: { status in
-                                                                    Task { await viewModel.setSlotStatus(on: day, hour: hour, status: status) }
-                                                                },
-                                                                onClear: {
-                                                                    Task { await viewModel.clearSlot(on: day, hour: hour) }
-                                                                }
-                                                            )
-                                                        }
+                                                            day: day,
+                                                            hour: hour,
+                                                            slotsForDay: viewModel.slotsByDay[DateOnly(day)] ?? [],
+                                                            dayColumnWidth: dayColumnWidth,
+                                                            rowHeight: rowHeight,
+                                                            horizontalPadding: 6,
+                                                            onEmptyTap: {
+                                                                editorContext = EditorContext(day: day, hour: hour)
+                                                            },
+                                                            onSlotTap: { slot in
+                                                                handleSlotTap(slot, defaultDay: day, defaultHour: hour)
+                                                            },
+                                                            onSetStatus: { status in
+                                                                Task { await viewModel.setSlotStatus(on: day, hour: hour, status: status) }
+                                                            },
+                                                            onClear: {
+                                                                Task { await viewModel.clearSlot(on: day, hour: hour) }
+                                                            }
+                                                        )
                                                     }
-                                                    .padding(.vertical, rowVerticalPadding)
                                                 }
+                                                .padding(.vertical, rowVerticalPadding)
                                             }
                                             .padding(.bottom, 8)
                                         }
