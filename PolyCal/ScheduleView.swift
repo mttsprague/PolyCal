@@ -36,9 +36,8 @@ struct ScheduleView: View {
     @State private var navigateToMyDay = false
     @State private var navigateToAllTrainersDay = false
 
-    // Client detail sheet
-    @State private var selectedClient: Client?
-    @State private var clientSheetShown = false
+    // Client detail sheet with identifiable item
+    @State private var clientSheetContext: Client?
 
 
     // Layout constants
@@ -248,17 +247,10 @@ struct ScheduleView: View {
                 AllTrainersDayView(scheduleViewModel: viewModel)
                     .environmentObject(auth)
             }
-            .sheet(isPresented: $clientSheetShown, onDismiss: {
-                selectedClient = nil
-            }, content: {
-                if let client = selectedClient {
-                    ClientDetailSheet(client: client)
-                        .presentationDetents([.medium, .large])
-                } else {
-                    ProgressView("Loading…")
-                        .padding()
-                }
-            })
+            .sheet(item: $clientSheetContext) { client in
+                ClientDetailSheet(client: client)
+                    .presentationDetents([.medium, .large])
+            }
             .sheet(item: $classSheetContext) { context in
                 ClassParticipantsView(
                     classId: context.classId,
@@ -434,8 +426,7 @@ struct ScheduleView: View {
         if slot.isBooked, let clientId = slot.clientId {
             // Check cache first
             if let cached = viewModel.clientsById[clientId] {
-                self.selectedClient = cached
-                self.clientSheetShown = true
+                self.clientSheetContext = cached
                 return
             }
 
@@ -444,12 +435,11 @@ struct ScheduleView: View {
                 let fetched = try? await FirestoreService.shared.fetchClient(by: clientId)
                 await MainActor.run {
                     if let client = fetched {
-                        self.selectedClient = client
                         viewModel.clientsById[clientId] = client
-                        self.clientSheetShown = true
+                        self.clientSheetContext = client
                     } else {
                         // Fallback to placeholder if fetch fails
-                        self.selectedClient = Client(
+                        self.clientSheetContext = Client(
                             id: clientId,
                             firstName: slot.clientName ?? "Booked",
                             lastName: "",
@@ -457,7 +447,6 @@ struct ScheduleView: View {
                             phoneNumber: "",
                             photoURL: nil
                         )
-                        self.clientSheetShown = true
                     }
                 }
             }

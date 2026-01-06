@@ -12,15 +12,13 @@ struct DayScheduleView: View {
     @EnvironmentObject private var auth: AuthManager
     @ObservedObject var viewModel: ScheduleViewModel
     
-    // Client detail sheet
-    @State private var selectedClient: Client?
-    @State private var clientSheetShown = false
+    // Client detail sheet with identifiable item
+    @State private var clientSheetContext: Client?
     
     // Class participants sheet
     @State private var selectedClassId: String?
     @State private var selectedClassName: String?
     @State private var preloadedParticipants: [ClassParticipant]?
-    @State private var classParticipantsShown = false
 
     var body: some View {
         NavigationView {
@@ -118,17 +116,10 @@ struct DayScheduleView: View {
                         .font(.headline)
                 }
             }
-            .sheet(isPresented: $clientSheetShown, onDismiss: {
-                selectedClient = nil
-            }, content: {
-                if let client = selectedClient {
-                    ClientDetailSheet(client: client)
-                        .presentationDetents([.medium, .large])
-                } else {
-                    ProgressView("Loading…")
-                        .padding()
-                }
-            })
+            .sheet(item: $clientSheetContext) { client in
+                ClientDetailSheet(client: client)
+                    .presentationDetents([.medium, .large])
+            }
             .sheet(isPresented: $classParticipantsShown) {
                 if let classId = selectedClassId, let className = selectedClassName {
                     ClassParticipantsView(
@@ -163,11 +154,10 @@ struct DayScheduleView: View {
         if slot.isBooked, let clientId = slot.clientId {
             // Check cache first
             if let cached = viewModel.clientsById[clientId] {
-                self.selectedClient = cached
-                self.clientSheetShown = true
+                self.clientSheetContext = cached
             } else {
                 // Show placeholder if not cached
-                self.selectedClient = Client(
+                self.clientSheetContext = Client(
                     id: clientId,
                     firstName: slot.clientName ?? "Booked",
                     lastName: "",
@@ -175,7 +165,6 @@ struct DayScheduleView: View {
                     phoneNumber: "",
                     photoURL: nil
                 )
-                self.clientSheetShown = true
             }
         }
     }
