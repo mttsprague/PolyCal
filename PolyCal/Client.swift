@@ -18,8 +18,11 @@ struct Client: Identifiable, Codable, Hashable {
     var athleteLastName: String?
     var athlete2FirstName: String?
     var athlete2LastName: String?
+    var athlete3FirstName: String?
+    var athlete3LastName: String?
     var athletePosition: String?
     var athlete2Position: String?
+    var athlete3Position: String?
     var notesForCoach: String?
 
     var fullName: String { "\(firstName) \(lastName)" }
@@ -37,6 +40,11 @@ struct Client: Identifiable, Codable, Hashable {
     
     var athlete2FullName: String? {
         guard let first = athlete2FirstName, let last = athlete2LastName else { return nil }
+        return "\(first) \(last)"
+    }
+    
+    var athlete3FullName: String? {
+        guard let first = athlete3FirstName, let last = athlete3LastName else { return nil }
         return "\(first) \(last)"
     }
 }

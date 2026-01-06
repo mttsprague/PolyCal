@@ -344,44 +344,67 @@ struct ClientDetailView: View {
                         .foregroundStyle(AppTheme.textPrimary)
                     
                     VStack(spacing: Spacing.sm) {
-                        // Email
-                        VStack(alignment: .leading, spacing: Spacing.xxs) {
-                            Text("Email")
-                                .font(.labelMedium)
-                                .foregroundStyle(AppTheme.textSecondary)
-                            
-                            Link(destination: URL(string: "mailto:\(client.emailAddress)")!) {
+                        // Name
+                        if !client.firstName.isEmpty || !client.lastName.isEmpty {
+                            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                                Text("Name")
+                                    .font(.labelMedium)
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                
                                 HStack(spacing: Spacing.xs) {
-                                    Image(systemName: "envelope.fill")
+                                    Image(systemName: "person.fill")
                                         .font(.system(size: 14))
-                                    Text(client.emailAddress)
+                                    Text(client.fullName)
                                         .font(.bodyMedium)
                                 }
-                                .foregroundStyle(AppTheme.primary)
+                                .foregroundStyle(AppTheme.textPrimary)
                             }
+                            
+                            Divider()
                         }
                         
-                        Divider()
+                        // Email
+                        if !client.emailAddress.isEmpty {
+                            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                                Text("Email")
+                                    .font(.labelMedium)
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                
+                                Link(destination: URL(string: "mailto:\(client.emailAddress)")!) {
+                                    HStack(spacing: Spacing.xs) {
+                                        Image(systemName: "envelope.fill")
+                                            .font(.system(size: 14))
+                                        Text(client.emailAddress)
+                                            .font(.bodyMedium)
+                                    }
+                                    .foregroundStyle(AppTheme.primary)
+                                }
+                            }
+                            
+                            Divider()
+                        }
                         
                         // Phone with Call/Text actions
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text("Phone")
-                                .font(.labelMedium)
-                                .foregroundStyle(AppTheme.textSecondary)
-                            
-                            HStack {
-                                HStack(spacing: Spacing.xs) {
-                                    Image(systemName: "phone.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(AppTheme.textPrimary)
-                                    Text(client.phoneNumber)
-                                        .font(.bodyMedium)
-                                        .foregroundStyle(AppTheme.textPrimary)
+                        if !client.phoneNumber.isEmpty {
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                Text("Phone")
+                                    .font(.labelMedium)
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                
+                                HStack {
+                                    HStack(spacing: Spacing.xs) {
+                                        Image(systemName: "phone.fill")
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(AppTheme.textPrimary)
+                                        Text(client.phoneNumber)
+                                            .font(.bodyMedium)
+                                            .foregroundStyle(AppTheme.textPrimary)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    InlinePhoneActions(phoneNumber: client.phoneNumber)
                                 }
-                                
-                                Spacer()
-                                
-                                InlinePhoneActions(phoneNumber: client.phoneNumber)
                             }
                         }
                     }
@@ -389,7 +412,7 @@ struct ClientDetailView: View {
             }
             
             // Athlete Information
-            if client.athleteFullName != nil || client.athlete2FullName != nil {
+            if client.athleteFullName != nil || client.athlete2FullName != nil || client.athlete3FullName != nil {
                 CardView {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         Text("Athlete Information")
@@ -399,7 +422,7 @@ struct ClientDetailView: View {
                         VStack(spacing: Spacing.sm) {
                             if let athleteName = client.athleteFullName {
                                 VStack(alignment: .leading, spacing: Spacing.xxs) {
-                                    Text("Primary Athlete")
+                                    Text("Athlete 1")
                                         .font(.labelMedium)
                                         .foregroundStyle(AppTheme.textSecondary)
                                     
@@ -408,7 +431,7 @@ struct ClientDetailView: View {
                                             .font(.system(size: 14))
                                         Text(athleteName)
                                             .font(.bodyMedium)
-                                        if let position = client.athletePosition {
+                                        if let position = client.athletePosition, !position.isEmpty {
                                             Text("•")
                                                 .foregroundStyle(AppTheme.textTertiary)
                                             Text(position)
@@ -421,10 +444,12 @@ struct ClientDetailView: View {
                             }
                             
                             if let athlete2Name = client.athlete2FullName {
-                                Divider()
+                                if client.athleteFullName != nil {
+                                    Divider()
+                                }
                                 
                                 VStack(alignment: .leading, spacing: Spacing.xxs) {
-                                    Text("Second Athlete")
+                                    Text("Athlete 2")
                                         .font(.labelMedium)
                                         .foregroundStyle(AppTheme.textSecondary)
                                     
@@ -433,7 +458,34 @@ struct ClientDetailView: View {
                                             .font(.system(size: 14))
                                         Text(athlete2Name)
                                             .font(.bodyMedium)
-                                        if let position = client.athlete2Position {
+                                        if let position = client.athlete2Position, !position.isEmpty {
+                                            Text("•")
+                                                .foregroundStyle(AppTheme.textTertiary)
+                                            Text(position)
+                                                .font(.bodyMedium)
+                                                .foregroundStyle(AppTheme.textSecondary)
+                                        }
+                                    }
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                }
+                            }
+                            
+                            if let athlete3Name = client.athlete3FullName {
+                                if client.athleteFullName != nil || client.athlete2FullName != nil {
+                                    Divider()
+                                }
+                                
+                                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                                    Text("Athlete 3")
+                                        .font(.labelMedium)
+                                        .foregroundStyle(AppTheme.textSecondary)
+                                    
+                                    HStack(spacing: Spacing.xs) {
+                                        Image(systemName: "figure.volleyball")
+                                            .font(.system(size: 14))
+                                        Text(athlete3Name)
+                                            .font(.bodyMedium)
+                                        if let position = client.athlete3Position, !position.isEmpty {
                                             Text("•")
                                                 .foregroundStyle(AppTheme.textTertiary)
                                             Text(position)
