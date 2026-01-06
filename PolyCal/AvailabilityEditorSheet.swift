@@ -524,7 +524,18 @@ struct AvailabilityEditorSheet: View {
     private func applyRecurring() {
         // Send to Cloud Function with 60-minute duration and selected weekdays
         let startDateToUse = bulkStartDate ?? Calendar.current.startOfDay(for: defaultDay)
-        let endDateToUse = recurringOngoing ? nil : bulkEndDate
+        
+        // If not ongoing and no end date set, default to 1 month after start
+        let endDateToUse: Date?
+        if recurringOngoing {
+            endDateToUse = nil
+        } else if let end = bulkEndDate {
+            endDateToUse = end
+        } else {
+            // Default to 1 month after start if user never explicitly set an end date
+            endDateToUse = Calendar.current.date(byAdding: .month, value: 1, to: startDateToUse)
+        }
+        
         let daysArray = selectedWeekdays.isEmpty ? nil : Array(selectedWeekdays).sorted()
 
         onSaveOngoing(startDateToUse, endDateToUse, recurringStartHour, recurringEndHour, 60, daysArray)

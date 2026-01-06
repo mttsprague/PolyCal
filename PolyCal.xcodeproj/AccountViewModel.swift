@@ -73,14 +73,7 @@ final class AccountViewModel: ObservableObject {
             change.displayName = "\(firstName) \(lastName)"
             try await change.commitChanges()
 
-            // Write users/{uid} per rules (allowed keys + createdAt + updatedAt)
-            try await FirestoreService.shared.createOrUpdateUserProfile(
-                uid: uid,
-                firstName: firstName,
-                lastName: lastName,
-                emailAddress: email
-            )
-
+            // PolyCal only creates trainer documents, NOT user documents
             // Create trainers/{uid} profile (owner can write)
             try await FirestoreService.shared.createOrUpdateTrainerProfile(
                 trainerId: uid,

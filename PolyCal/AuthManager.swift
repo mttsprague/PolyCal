@@ -76,14 +76,7 @@ final class AuthManager: ObservableObject {
             let result = try await Auth.auth().createUser(withEmail: emailInput, password: passwordInput)
             let uid = result.user.uid
 
-            // Create or update base user profile (allowed by your rules)
-            try await FirestoreService.shared.createOrUpdateUserProfile(
-                uid: uid,
-                firstName: firstNameInput,
-                lastName: lastNameInput,
-                emailAddress: emailInput
-            )
-
+            // PolyCal only creates trainer documents, NOT user documents
             // Call server to register as trainer (or simulate if Functions unavailable)
             try await registerTrainerProfileOnServer(uid: uid, email: emailInput, firstName: firstNameInput, lastName: lastNameInput)
 
