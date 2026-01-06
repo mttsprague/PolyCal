@@ -183,6 +183,8 @@ struct ScheduleView: View {
                             }
                         }
 
+                        }
+
                         TimelineView(.everyMinute) { context in
                             if let y = currentTimeYOffset(for: context.date,
                                                           firstHour: viewModel.visibleHours.first,
