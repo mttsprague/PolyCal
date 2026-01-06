@@ -195,9 +195,9 @@ struct AllTrainersDayView: View {
             // Check cache first
             if let client = scheduleViewModel.clientsById[clientId] {
                 // Create booking info from slot
-                let trainerName = viewModel.trainerSchedules
-                    .first(where: { $0.trainer.id == slot.trainerId })?
-                    .trainer.name ?? "Trainer"
+                let trainerName = viewModel.trainers
+                    .first(where: { $0.id == slot.trainerId })?
+                    .displayName ?? "Trainer"
                 
                 let booking = ClientBooking(
                     id: slot.id,
@@ -223,9 +223,9 @@ struct AllTrainersDayView: View {
                     photoURL: nil
                 )
                 
-                let trainerName = viewModel.trainerSchedules
-                    .first(where: { $0.trainer.id == slot.trainerId })?
-                    .trainer.name ?? "Trainer"
+                let trainerName = viewModel.trainers
+                    .first(where: { $0.id == slot.trainerId })?
+                    .displayName ?? "Trainer"
                 
                 let booking = ClientBooking(
                     id: slot.id,
