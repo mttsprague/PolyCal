@@ -56,6 +56,9 @@ struct ScheduleView: View {
     
     // Track if we've done initial scroll to current time
     @State private var hasScrolledToCurrentTime = false
+    
+    // For synchronized horizontal scrolling between header and grid
+    @State private var scrollOffset: CGFloat = 0
 
     var body: some View {
         NavigationStack {
@@ -77,14 +80,53 @@ struct ScheduleView: View {
                 .padding(.top, 2)
                 .padding(.bottom, 4)
 
+                // Fixed header row
+                HStack(spacing: 0) {
+                    // Empty corner space above hour labels
+                    Color.clear
+                        .frame(width: timeColWidth, height: headerRowHeight + gridHeaderVPad * 2)
+                        .background(Color(UIColor.systemGray6))
+                    
+                    // Day headers that scroll with grid
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: columnSpacing) {
+                            ForEach(viewModel.weekDays, id: \.self) { day in
+                                VStack(spacing: 2) {
+                                    Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                    Text(day, format: .dateTime.month(.abbreviated).day())
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(width: dayColumnWidth)
+                                .padding(.horizontal, 6)
+                                .multilineTextAlignment(.center)
+                            }
+                        }
+                        .padding(.vertical, gridHeaderVPad)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.preference(
+                                    key: ScrollOffsetPreferenceKey.self,
+                                    value: geo.frame(in: .named("headerScroll")).minX
+                                )
+                            }
+                        )
+                    }
+                    .coordinateSpace(name: "headerScroll")
+                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                        scrollOffset = value
+                    }
+                }
+                .frame(height: headerRowHeight + gridHeaderVPad * 2)
+                .background(Color(UIColor.systemBackground))
+
                 ZStack(alignment: .topLeading) {
                     ScrollViewReader { verticalScrollProxy in
                         ScrollView(.vertical, showsIndicators: true) {
                             HStack(spacing: 0) {
                                 VStack(spacing: 0) {
-                                    Color.clear
-                                        .frame(height: headerRowHeight + gridHeaderVPad * 2)
-
                                     ForEach(viewModel.visibleHours, id: \.self) { hour in
                                         Text(hourLabel(hour))
                                             .font(.caption2)
@@ -103,30 +145,10 @@ struct ScheduleView: View {
                                 ScrollViewReader { scrollProxy in
                                     ScrollView(.horizontal, showsIndicators: true) {
                                         VStack(spacing: 0) {
-                                            HStack(spacing: columnSpacing) {
-                                                ForEach(viewModel.weekDays, id: \.self) { day in
-                                                    VStack(spacing: 2) {
-                                                        Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                                                            .font(.caption2.weight(.semibold))
-                                                            .foregroundStyle(.secondary)
-                                                        Text(day, format: .dateTime.month(.abbreviated).day())
-                                                            .font(.caption)
-                                                            .foregroundStyle(.secondary)
-                                                    }
-                                                    .frame(width: dayColumnWidth)
-                                                    .padding(.horizontal, 6) // match cell padding
-                                                    .multilineTextAlignment(.center)
-                                                    .id(day)
-                                                }
-                                            }
-                                            .padding(.vertical, gridHeaderVPad)
-                                            // Removed extra leading/trailing so header aligns with grid below
-
-                                            VStack(spacing: 0) {
-                                                ForEach(viewModel.visibleHours, id: \.self) { hour in
-                                                    HStack(spacing: columnSpacing) {
-                                                        ForEach(viewModel.weekDays, id: \.self) { day in
-                                                            HourDayCell(
+                                            ForEach(viewModel.visibleHours, id: \.self) { hour in
+                                                HStack(spacing: columnSpacing) {
+                                                    ForEach(viewModel.weekDays, id: \.self) { day in
+                                                        HourDayCell(
                                                                 day: day,
                                                                 hour: hour,
                                                                 slotsForDay: viewModel.slotsByDay[DateOnly(day)] ?? [],
@@ -178,7 +200,7 @@ struct ScheduleView: View {
                                 .fill(Color.red)
                                 .frame(height: 2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .offset(x: 0, y: (headerRowHeight + gridHeaderVPad * 2) + y)
+                                .offset(x: 0, y: y)
                                 .accessibilityHidden(true)
                         }
                     }
@@ -759,5 +781,13 @@ struct ScheduleView: View {
             .padding()
             .presentationDragIndicator(.visible)
         }
+    }
+}
+
+// PreferenceKey for tracking scroll offset
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
