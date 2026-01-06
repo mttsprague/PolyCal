@@ -47,9 +47,8 @@ service cloud.firestore {
       // Admins can read any booking
       allow read: if isAdmin();
 
-      // Add create, update, delete rules here if clients or admins manage these directly.
-      // For example, an admin might be able to create/update/delete any booking:
-      // allow create, update, delete: if isAdmin();
+      // Trainers can create, update, and delete bookings (for admin booking feature)
+      allow create, update, delete: if isTrainer() || isAdmin();
     }
 
     // =========================
@@ -181,9 +180,10 @@ service cloud.firestore {
                       && (request.auth.uid == userId || isAdmin())
                       && isValidLessonPackageCreate();
 
-        // Block client-side updates/deletes; booking decrements should be done
-        // by Cloud Function via Admin SDK (bypasses rules).
-        allow update, delete: if isAdmin();
+        // Admins and trainers can update packages (for booking decrements)
+        // Trainers need this for the admin booking feature in PolyCal
+        allow update: if isAdmin() || isTrainer();
+        allow delete: if isAdmin();
 
         function isValidLessonPackageCreate() {
           // Allowed fields on create (transactionId is optional)
@@ -273,8 +273,9 @@ service cloud.firestore {
 
         // Only the owner (trainerId) or an admin can create, update, or delete their own availability slots.
         // Admins can create class bookings (with clientId, clientName, etc.)
-        // Trainers can only create availability (open/unavailable) slots
-        allow create, update, delete: if (isOwner(trainerId) && isValidAvailabilityWrite()) || (isAdmin() && isValidClassBookingWrite());
+        // Trainers can create availability slots OR book lessons for clients (admin booking feature)
+        allow create, update, delete: if (isOwner(trainerId) && (isValidAvailabilityWrite() || isValidBookingWrite())) 
+                                      || (isAdmin() && (isValidAvailabilityWrite() || isValidClassBookingWrite() || isValidBookingWrite()));
 
         // Explicitly deny any other direct writes to prevent unauthorized modifications.
         allow write: if false;
@@ -323,6 +324,25 @@ service cloud.firestore {
           let timeOrderOk = data.startTime < data.endTime;
           
           return hasRequiredFields && validTypes && timeOrderOk;
+        }
+        
+        // Validate trainer admin booking writes (booking lessons for clients)
+        function isValidBookingWrite() {
+          let data = request.resource.data;
+          
+          // Must be setting status to "booked" with client info
+          let statusBooked = ("status" in data) && (data.status == "booked");
+          let hasClientId = ("clientId" in data) && (data.clientId is string);
+          let hasClientName = ("clientName" in data) && (data.clientName is string);
+          
+          // Timestamps if provided must be valid
+          let hasStart = "startTime" in data;
+          let hasEnd = "endTime" in data;
+          let startTypeOk = !hasStart || (data.startTime is timestamp);
+          let endTypeOk = !hasEnd || (data.endTime is timestamp);
+          let orderOk = !(hasStart && hasEnd) || (data.startTime < data.endTime);
+          
+          return statusBooked && hasClientId && hasClientName && startTypeOk && endTypeOk && orderOk;
         }
       }
     }
