@@ -198,6 +198,12 @@ final class AuthManager: ObservableObject {
             if let data = snap.data() {
                 self.trainerDisplayName = (data["name"] as? String) ?? self.trainerDisplayName
                 self.isAdmin = (data["admin"] as? Bool) ?? false
+                
+                // Debug logging
+                print("🔐 AuthManager: Loaded trainer profile for \(uid)")
+                print("   - isAdmin: \(self.isAdmin)")
+                print("   - admin field in Firestore: \(data["admin"] ?? "nil")")
+                
                 if let url = data["photoURL"] as? String, !url.isEmpty {
                     self.trainerPhotoURLString = url
                 } else if let url = data["avatarUrl"] as? String, !url.isEmpty {
@@ -205,6 +211,7 @@ final class AuthManager: ObservableObject {
                 }
             }
         } catch {
+            print("⚠️ AuthManager: Error loading trainer profile: \(error.localizedDescription)")
             // Leave previous values; optionally surface error
         }
         #endif
