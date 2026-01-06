@@ -49,6 +49,9 @@ struct ScheduleView: View {
     private let columnSpacing: CGFloat = 0
     private let gridHeaderVPad: CGFloat = 6
     private let headerRowHeight: CGFloat = 28
+    
+    // Track if we've done initial scroll to current time
+    @State private var hasScrolledToCurrentTime = false
 
     var body: some View {
         NavigationStack {
@@ -66,25 +69,27 @@ struct ScheduleView: View {
                 .padding(.bottom, 4)
 
                 ZStack(alignment: .topLeading) {
-                    ScrollView(.vertical, showsIndicators: true) {
-                        HStack(spacing: 0) {
-                            VStack(spacing: 0) {
-                                Color.clear
-                                    .frame(height: headerRowHeight + gridHeaderVPad * 2)
+                    ScrollViewReader { verticalScrollProxy in
+                        ScrollView(.vertical, showsIndicators: true) {
+                            HStack(spacing: 0) {
+                                VStack(spacing: 0) {
+                                    Color.clear
+                                        .frame(height: headerRowHeight + gridHeaderVPad * 2)
 
-                                ForEach(viewModel.visibleHours, id: \.self) { hour in
-                                    Text(hourLabel(hour))
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                        .frame(maxWidth: .infinity, alignment: .trailing)
-                                        .padding(.trailing, 6)
-                                        .frame(height: rowHeight)
-                                        .background(Color(UIColor.systemGray6))
-                                        .padding(.vertical, rowVerticalPadding)
+                                    ForEach(viewModel.visibleHours, id: \.self) { hour in
+                                        Text(hourLabel(hour))
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .frame(maxWidth: .infinity, alignment: .trailing)
+                                            .padding(.trailing, 6)
+                                            .frame(height: rowHeight)
+                                            .background(Color(UIColor.systemGray6))
+                                            .padding(.vertical, rowVerticalPadding)
+                                            .id("hour-\(hour)")
+                                    }
                                 }
-                            }
-                            .frame(width: timeColWidth)
-                            .background(Color(UIColor.systemGray6))
+                                .frame(width: timeColWidth)
+                                .background(Color(UIColor.systemGray6))
 
                             ScrollViewReader { scrollProxy in
                                 ScrollView(.horizontal, showsIndicators: true) {
@@ -149,6 +154,9 @@ struct ScheduleView: View {
                             }
                         }
                         .background(Color(UIColor.systemGray6))
+                        .onAppear {
+                            scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
+                        }
                     }
 
                     TimelineView(.everyMinute) { context in
@@ -274,6 +282,22 @@ struct ScheduleView: View {
         let cal = Calendar.current
         let target = viewModel.weekDays.first(where: { cal.isDate($0, inSameDayAs: viewModel.selectedDate) }) ?? viewModel.selectedDate
         scrollProxy.scrollTo(target, anchor: .center)
+    }
+    
+    private func scrollToCurrentTime(verticalScrollProxy: ScrollViewProxy) {
+        guard !hasScrolledToCurrentTime else { return }
+        
+        let now = Date()
+        let comps = Calendar.current.dateComponents([.hour], from: now)
+        guard let currentHour = comps.hour else { return }
+        
+        // Scroll to the current hour, centered
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            withAnimation(.easeInOut(duration: 0.5)) {
+                verticalScrollProxy.scrollTo("hour-\(currentHour)", anchor: .center)
+            }
+            hasScrolledToCurrentTime = true
+        }
     }
 
     private var header: some View {

@@ -33,7 +33,7 @@ final class ScheduleViewModel: ObservableObject {
             buildCurrentWeek(anchor: selectedDate)
         }
     }
-    @Published var visibleHours: [Int] = Array(6...20) // 6am - 8pm
+    @Published var visibleHours: [Int] = Array(6...23) // 6am - 11pm (with 12am/midnight as last slot)
     @Published var slotsByDay: [DateOnly: [TrainerScheduleSlot]] = [:]
 
     // Client cache for instant presentation
