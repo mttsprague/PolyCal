@@ -182,9 +182,7 @@ struct ScheduleView: View {
                                 scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
                             }
                         }
-
-                        }
-
+                        
                         TimelineView(.everyMinute) { context in
                             if let y = currentTimeYOffset(for: context.date,
                                                           firstHour: viewModel.visibleHours.first,
