@@ -46,9 +46,13 @@ service cloud.firestore {
       allow read: if isTrainer();
       // Admins can read any booking
       allow read: if isAdmin();
+      // Also allow reading if you're the trainer for this booking
+      allow read: if isSignedIn() && request.auth.uid == resource.data.trainerId;
 
       // Trainers can create, update, and delete bookings (for admin booking feature)
       allow create, update, delete: if isTrainer() || isAdmin();
+      // Also allow if you're creating a booking for your own trainer schedule
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.trainerId;
     }
 
     // =========================
