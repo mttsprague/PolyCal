@@ -49,10 +49,8 @@ struct ScheduleView: View {
     private let rowHeight: CGFloat = 32
     private let rowVerticalPadding: CGFloat = 6
     private let timeColWidth: CGFloat = 56
-    private let dayColumnWidth: CGFloat = 160
+    private let dayColumnWidth: CGFloat = 47
     private let columnSpacing: CGFloat = 0
-    private let gridHeaderVPad: CGFloat = 6
-    private let headerRowHeight: CGFloat = 28
     
     // Track if we've done initial scroll to current time
     @State private var hasScrolledToCurrentTime = false
@@ -82,9 +80,6 @@ struct ScheduleView: View {
                         ScrollView(.vertical, showsIndicators: true) {
                             HStack(spacing: 0) {
                                 VStack(spacing: 0) {
-                                    Color.clear
-                                        .frame(height: headerRowHeight + gridHeaderVPad * 2)
-
                                     ForEach(viewModel.visibleHours, id: \.self) { hour in
                                         Text(hourLabel(hour))
                                             .font(.caption2)
@@ -100,65 +95,37 @@ struct ScheduleView: View {
                                 .frame(width: timeColWidth)
                                 .background(Color(UIColor.systemGray6))
 
-                                ScrollViewReader { scrollProxy in
-                                    ScrollView(.horizontal, showsIndicators: true) {
+                                HStack(spacing: columnSpacing) {
+                                    ForEach(viewModel.weekDays, id: \.self) { day in
                                         VStack(spacing: 0) {
-                                            HStack(spacing: columnSpacing) {
-                                                ForEach(viewModel.weekDays, id: \.self) { day in
-                                                    VStack(spacing: 2) {
-                                                        Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                                                            .font(.caption2.weight(.semibold))
-                                                            .foregroundStyle(.secondary)
-                                                        Text(day, format: .dateTime.month(.abbreviated).day())
-                                                            .font(.caption)
-                                                            .foregroundStyle(.secondary)
-                                                    }
-                                                    .frame(width: dayColumnWidth)
-                                                    .padding(.horizontal, 6)
-                                                    .multilineTextAlignment(.center)
-                                                    .id(day)
-                                                }
-                                            }
-                                            .padding(.vertical, gridHeaderVPad)
-
                                             ForEach(viewModel.visibleHours, id: \.self) { hour in
-                                                HStack(spacing: columnSpacing) {
-                                                    ForEach(viewModel.weekDays, id: \.self) { day in
-                                                        HourDayCell(
-                                                            day: day,
-                                                            hour: hour,
-                                                            slotsForDay: viewModel.slotsByDay[DateOnly(day)] ?? [],
-                                                            dayColumnWidth: dayColumnWidth,
-                                                            rowHeight: rowHeight,
-                                                            horizontalPadding: 6,
-                                                            onEmptyTap: {
-                                                                editorContext = EditorContext(day: day, hour: hour)
-                                                            },
-                                                            onSlotTap: { slot in
-                                                                handleSlotTap(slot, defaultDay: day, defaultHour: hour)
-                                                            },
-                                                            onSetStatus: { status in
-                                                                Task { await viewModel.setSlotStatus(on: day, hour: hour, status: status) }
-                                                            },
-                                                            onClear: {
-                                                                Task { await viewModel.clearSlot(on: day, hour: hour) }
-                                                            }
-                                                        )
+                                                HourDayCell(
+                                                    day: day,
+                                                    hour: hour,
+                                                    slotsForDay: viewModel.slotsByDay[DateOnly(day)] ?? [],
+                                                    dayColumnWidth: dayColumnWidth,
+                                                    rowHeight: rowHeight,
+                                                    horizontalPadding: 6,
+                                                    onEmptyTap: {
+                                                        editorContext = EditorContext(day: day, hour: hour)
+                                                    },
+                                                    onSlotTap: { slot in
+                                                        handleSlotTap(slot, defaultDay: day, defaultHour: hour)
+                                                    },
+                                                    onSetStatus: { status in
+                                                        Task { await viewModel.setSlotStatus(on: day, hour: hour, status: status) }
+                                                    },
+                                                    onClear: {
+                                                        Task { await viewModel.clearSlot(on: day, hour: hour) }
                                                     }
-                                                }
+                                                )
                                                 .padding(.vertical, rowVerticalPadding)
                                             }
-                                            .padding(.bottom, 8)
                                         }
                                     }
-                                    .onAppear {
-                                        scrollToCurrentDay(scrollProxy: scrollProxy)
-                                    }
-                                    .onChange(of: viewModel.selectedDate) { _, _ in
-                                        scrollToCurrentDay(scrollProxy: scrollProxy)
-                                    }
                                 }
-                            } // <-- close HStack(spacing: 0)
+                                .padding(.bottom, 8)
+                            }
                         }
                         .background(Color(UIColor.systemGray6))
                         .onAppear {
@@ -175,7 +142,7 @@ struct ScheduleView: View {
                                 .fill(Color.red)
                                 .frame(height: 2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .offset(x: 0, y: (headerRowHeight + gridHeaderVPad * 2) + y)
+                                .offset(x: 0, y: y)
                                 .accessibilityHidden(true)
                         }
                     }
