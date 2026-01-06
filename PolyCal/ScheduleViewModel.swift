@@ -350,12 +350,19 @@ final class ScheduleViewModel: ObservableObject {
     
     // Admin function to book a lesson for a client
     func bookLessonForClient(clientId: String, startTime: Date, endTime: Date, packageId: String) async {
+        print("🎯 ScheduleViewModel: bookLessonForClient called")
+        print("   - trainerId: \(editingTrainerId ?? "nil")")
+        print("   - clientId: \(clientId)")
+        print("   - startTime: \(startTime)")
+        print("   - packageId: \(packageId)")
+        
         guard let trainerId = editingTrainerId else {
-            print("No trainer selected for booking")
+            print("❌ No trainer selected for booking")
             return
         }
         
         do {
+            print("🎯 Step 1: Creating slot...")
             // First, create the slot if it doesn't exist
             try await scheduleRepo.upsertSlot(
                 trainerId: trainerId,
@@ -364,6 +371,7 @@ final class ScheduleViewModel: ObservableObject {
                 status: .open
             )
             
+            print("🎯 Step 2: Fetching slot...")
             // Get the slot ID (we need to fetch it back)
             let slots = try await FirestoreService.shared.fetchTrainerSchedule(
                 trainerId: trainerId,
@@ -372,10 +380,11 @@ final class ScheduleViewModel: ObservableObject {
             )
             
             guard let slot = slots.first(where: { $0.startTime == startTime }) else {
-                print("Failed to find created slot")
+                print("❌ Failed to find created slot")
                 return
             }
             
+            print("🎯 Step 3: Booking with slotId: \(slot.id)")
             // Book the lesson using the admin booking function
             try await FirestoreService.shared.adminBookLesson(
                 trainerId: trainerId,
@@ -384,10 +393,10 @@ final class ScheduleViewModel: ObservableObject {
                 packageId: packageId
             )
             
-            print("Successfully booked lesson for client")
+            print("✅ Successfully booked lesson for client")
             await loadWeek()
         } catch {
-            print("Failed to book lesson for client: \(error)")
+            print("❌ Failed to book lesson for client: \(error)")
         }
     }
 

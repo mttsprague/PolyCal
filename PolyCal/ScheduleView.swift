@@ -241,14 +241,19 @@ struct ScheduleView: View {
                         }
                     },
                     onBookLesson: { clientId, startTime, endTime, packageId in
+                        print("📋 ScheduleView: Received booking request")
                         Task {
+                            print("📋 ScheduleView: Calling bookLessonForClient...")
                             await viewModel.bookLessonForClient(
                                 clientId: clientId,
                                 startTime: startTime,
                                 endTime: endTime,
                                 packageId: packageId
                             )
-                            editorContext = nil
+                            print("📋 ScheduleView: Booking complete, clearing editorContext")
+                            await MainActor.run {
+                                editorContext = nil
+                            }
                         }
                     }
                 )

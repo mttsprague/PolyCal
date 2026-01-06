@@ -390,9 +390,19 @@ struct AvailabilityEditorSheet: View {
             return
         }
         
+        print("📝 AvailabilityEditorSheet: Starting booking...")
+        print("   - clientId: \(clientId)")
+        print("   - packageId: \(packageId)")
+        print("   - startTime: \(singleStart)")
+        print("   - endTime: \(singleEnd)")
+        
         bookingError = nil
+        
+        // Call the booking function and let it handle dismissal
         onBookLesson(clientId, singleStart, singleEnd, packageId)
-        dismiss()
+        
+        // Don't dismiss immediately - let the parent handle dismissal after booking completes
+        print("📝 AvailabilityEditorSheet: Booking request sent to parent")
     }
 
     private var singleSaveDisabled: Bool {

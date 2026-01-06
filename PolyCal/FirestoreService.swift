@@ -488,27 +488,45 @@ final class FirestoreService {
             throw FirestoreServiceError.decoding
         }
         
-        // 2. Update the slot to booked status
+        // 2. Get trainer name
+        let trainerSnap = try await db.collection("trainers").document(trainerId).getDocument()
+        let trainerName = trainerSnap.data()?["name"] as? String ?? "Trainer"
+        
+        // 3. Get client name
+        let clientSnap = try await db.collection("users").document(clientId).getDocument()
+        let clientData = clientSnap.data() ?? [:]
+        let firstName = clientData["firstName"] as? String ?? ""
+        let lastName = clientData["lastName"] as? String ?? ""
+        let clientName = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
+        
+        // 4. Update the slot to booked status with client info
         batch.updateData([
             "status": "booked",
             "clientId": clientId,
+            "clientName": clientName,
             "bookedAt": Timestamp(date: Date()),
             "updatedAt": Timestamp(date: Date())
         ], forDocument: slotRef)
         
-        // 3. Create the booking document
+        // 5. Create the booking document with all required fields
         let bookingRef = db.collection("bookings").document()
         batch.setData([
             "clientUID": clientId,
+            "clientName": clientName,
             "trainerUID": trainerId,
+            "trainerId": trainerId,
+            "trainerName": trainerName,
             "startTime": startTs,
             "endTime": endTs,
             "status": "confirmed",
             "bookedAt": Timestamp(date: Date()),
-            "lessonPackageId": packageId
+            "packageId": packageId,
+            "lessonPackageId": packageId,
+            "scheduleSlotId": slotId,
+            "slotId": slotId
         ], forDocument: bookingRef)
         
-        // 4. Decrement the package lessons remaining
+        // 6. Increment the package lessons used
         let packageRef = db.collection("users")
             .document(clientId)
             .collection("lessonPackages")
@@ -520,6 +538,12 @@ final class FirestoreService {
         
         // Commit all changes atomically
         try await batch.commit()
+        
+        print("✅ Admin booking created successfully:")
+        print("   - bookingId: \(bookingRef.documentID)")
+        print("   - clientName: \(clientName)")
+        print("   - trainerName: \(trainerName)")
+        print("   - slotId: \(slotId)")
         #else
         throw FirestoreServiceError.notAvailable
         #endif
