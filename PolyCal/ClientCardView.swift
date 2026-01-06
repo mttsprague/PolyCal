@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 enum ClientCardTab: String, CaseIterable, Identifiable {
     case profile = "Profile"

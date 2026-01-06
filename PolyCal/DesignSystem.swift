@@ -25,6 +25,7 @@ enum AppTheme {
     static let textPrimary = Color.primary
     static let textSecondary = Color.secondary
     static let textTertiary = Color(white: 0.6)
+    static let border = Color(UIColor.separator)
     
     // Status colors
     static let success = Color.green

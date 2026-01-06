@@ -8,11 +8,11 @@
 import SwiftUI
 import Combine
 
-struct ClientCardView: View {
+struct ClientCardViewOld: View {
     let client: Client
     let selectedBooking: ClientBooking? // If opened from a booked lesson
     
-    @StateObject private var viewModel = ClientCardViewModel()
+    @StateObject private var viewModel = ClientCardViewModelOld()
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -436,7 +436,7 @@ struct ClientCardView: View {
 
 // MARK: - View Model
 @MainActor
-class ClientCardViewModel: ObservableObject {
+class ClientCardViewModelOld: ObservableObject {
     @Published var packages: [LessonPackage] = []
     @Published var upcomingBookings: [ClientBooking] = []
     @Published var pastBookings: [ClientBooking] = []
@@ -502,3 +502,4 @@ class ClientCardViewModel: ObservableObject {
         }
     }
 }
+
