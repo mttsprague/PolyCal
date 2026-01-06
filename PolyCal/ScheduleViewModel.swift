@@ -45,7 +45,6 @@ final class ScheduleViewModel: ObservableObject {
     @Published var participantsByClassId: [String: [ClassParticipant]] = [:]
 
     private let scheduleRepo = ScheduleRepository()
-    private let trainersRepo = TrainersRepository()
 
     init() {
         buildCurrentWeek(anchor: Date())
@@ -61,7 +60,7 @@ final class ScheduleViewModel: ObservableObject {
     // Load all trainers (for admin selector)
     func loadAllTrainers() async {
         do {
-            allTrainers = try await trainersRepo.fetchAllTrainers()
+            allTrainers = try await FirestoreService.shared.fetchAllTrainers()
         } catch {
             print("Error loading trainers: \(error)")
             allTrainers = []

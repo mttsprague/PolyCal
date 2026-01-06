@@ -522,18 +522,6 @@ struct ClientDetailView: View {
 
 // MARK: - Data Models
 
-struct ClientBooking: Identifiable {
-    let id: String
-    let trainerId: String
-    let trainerName: String
-    let startTime: Date
-    let endTime: Date
-    let status: String
-    let bookedAt: Date?
-    let isClassBooking: Bool?
-    let classId: String?
-}
-
 struct ClientClass: Identifiable {
     let id: String
     let startTime: Date
