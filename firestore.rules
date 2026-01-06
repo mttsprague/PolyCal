@@ -274,8 +274,10 @@ service cloud.firestore {
         // Only the owner (trainerId) or an admin can create, update, or delete their own availability slots.
         // Admins can create class bookings (with clientId, clientName, etc.)
         // Trainers can create availability slots OR book lessons for clients (admin booking feature)
+        // Allow trainers to update any trainer's slot for booking purposes
         allow create, update, delete: if (isOwner(trainerId) && (isValidAvailabilityWrite() || isValidBookingWrite())) 
-                                      || (isAdmin() && (isValidAvailabilityWrite() || isValidClassBookingWrite() || isValidBookingWrite()));
+                                      || (isAdmin() && (isValidAvailabilityWrite() || isValidClassBookingWrite() || isValidBookingWrite()))
+                                      || (isTrainer() && isValidBookingWrite());
 
         // Explicitly deny any other direct writes to prevent unauthorized modifications.
         allow write: if false;
