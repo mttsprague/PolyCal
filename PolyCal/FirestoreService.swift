@@ -442,6 +442,63 @@ final class FirestoreService {
         #endif
     }
     
+    // MARK: - Admin Booking
+    func adminBookLesson(trainerId: String, slotId: String, clientId: String, packageId: String) async throws {
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        let batch = db.batch()
+        
+        // 1. Get the slot reference
+        let slotRef = db.collection("trainers")
+            .document(trainerId)
+            .collection("schedules")
+            .document(slotId)
+        
+        // Get slot data to extract times
+        let slotSnap = try await slotRef.getDocument()
+        guard let slotData = slotSnap.data(),
+              let startTs = slotData["startTime"] as? Timestamp,
+              let endTs = slotData["endTime"] as? Timestamp else {
+            throw FirestoreServiceError.decoding
+        }
+        
+        // 2. Update the slot to booked status
+        batch.updateData([
+            "status": "booked",
+            "clientId": clientId,
+            "bookedAt": Timestamp(date: Date()),
+            "updatedAt": Timestamp(date: Date())
+        ], forDocument: slotRef)
+        
+        // 3. Create the booking document
+        let bookingRef = db.collection("bookings").document()
+        batch.setData([
+            "clientUID": clientId,
+            "trainerUID": trainerId,
+            "startTime": startTs,
+            "endTime": endTs,
+            "status": "confirmed",
+            "bookedAt": Timestamp(date: Date()),
+            "lessonPackageId": packageId
+        ], forDocument: bookingRef)
+        
+        // 4. Decrement the package lessons remaining
+        let packageRef = db.collection("users")
+            .document(clientId)
+            .collection("lessonPackages")
+            .document(packageId)
+        
+        batch.updateData([
+            "lessonsUsed": FieldValue.increment(Int64(1))
+        ], forDocument: packageRef)
+        
+        // Commit all changes atomically
+        try await batch.commit()
+        #else
+        throw FirestoreServiceError.notAvailable
+        #endif
+    }
+    
     // MARK: - Client Bookings
     func fetchClientBookings(clientId: String, upcoming: Bool) async throws -> [ClientBooking] {
         #if canImport(FirebaseFirestore)

@@ -10,8 +10,11 @@ import SwiftUI
 struct AvailabilityEditorSheet: View {
     let defaultDay: Date
     let defaultHour: Int
+    let isAdmin: Bool
+    let editingTrainerId: String?
     let onSaveSingle: (Date, Date, Date, TrainerScheduleSlot.Status) -> Void
     let onSaveOngoing: (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void
+    let onBookLesson: (String, Date, Date, String) -> Void // clientId, startTime, endTime, packageId
 
     @Environment(\.dismiss) private var dismiss
 
@@ -32,17 +35,33 @@ struct AvailabilityEditorSheet: View {
     @State private var selectedWeekdays: Set<Int> = []
     @State private var recurringStartHour: Int
     @State private var recurringEndHour: Int
+    
+    // Admin booking state
+    @State private var showBookingSection: Bool = false
+    @State private var allClients: [Client] = []
+    @State private var selectedClientId: String?
+    @State private var clientPackages: [LessonPackage] = []
+    @State private var selectedPackageId: String?
+    @State private var isLoadingClients: Bool = false
+    @State private var isLoadingPackages: Bool = false
+    @State private var bookingError: String?
 
     init(
         defaultDay: Date,
         defaultHour: Int,
+        isAdmin: Bool = false,
+        editingTrainerId: String? = nil,
         onSaveSingle: @escaping (Date, Date, Date, TrainerScheduleSlot.Status) -> Void,
-        onSaveOngoing: @escaping (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void
+        onSaveOngoing: @escaping (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void,
+        onBookLesson: @escaping (String, Date, Date, String) -> Void = { _, _, _, _ in }
     ) {
         self.defaultDay = defaultDay
         self.defaultHour = defaultHour
+        self.isAdmin = isAdmin
+        self.editingTrainerId = editingTrainerId
         self.onSaveSingle = onSaveSingle
         self.onSaveOngoing = onSaveOngoing
+        self.onBookLesson = onBookLesson
 
         // Initialize state with provided defaults
         let cal = Calendar.current
@@ -71,6 +90,11 @@ struct AvailabilityEditorSheet: View {
 
                 // Recurring editor (toggle on/off, then show details)
                 recurringSection
+                
+                // Admin booking section
+                if isAdmin {
+                    adminBookingSection
+                }
             }
             .navigationTitle("Edit Availability")
             .navigationBarTitleDisplayMode(.inline)
@@ -86,6 +110,9 @@ struct AvailabilityEditorSheet: View {
             // Ensure initial values obey the rules on first appearance
             .onAppear {
                 snapAndSyncTimes()
+                if isAdmin {
+                    loadClients()
+                }
             }
         }
     }
@@ -194,6 +221,177 @@ struct AvailabilityEditorSheet: View {
                 }
             }
         }
+    }
+    
+    // MARK: - Admin Booking Section
+    
+    private var adminBookingSection: some View {
+        Section {
+            Toggle("Book Lesson for Client", isOn: $showBookingSection)
+            
+            if showBookingSection {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Client selector
+                    if isLoadingClients {
+                        HStack {
+                            ProgressView()
+                            Text("Loading clients...")
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if allClients.isEmpty {
+                        Text("No clients found")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Picker("Client", selection: $selectedClientId) {
+                            Text("Select a client...").tag(nil as String?)
+                            ForEach(allClients) { client in
+                                Text(client.fullName).tag(Optional(client.id))
+                            }
+                        }
+                        .onChange(of: selectedClientId) { _, newValue in
+                            if let clientId = newValue {
+                                loadPackagesForClient(clientId)
+                            } else {
+                                clientPackages = []
+                                selectedPackageId = nil
+                            }
+                        }
+                    }
+                    
+                    // Time editor (defaults to selected slot)
+                    DatePicker("Start Time", selection: $singleStart, displayedComponents: [.date, .hourAndMinute])
+                        .onChange(of: singleStart) { _, _ in
+                            // Ensure end is at least 1 hour after start
+                            let cal = Calendar.current
+                            let minEnd = cal.date(byAdding: .hour, value: 1, to: singleStart) ?? singleStart.addingTimeInterval(3600)
+                            if singleEnd < minEnd {
+                                singleEnd = minEnd
+                            }
+                        }
+                    
+                    DatePicker("End Time", selection: $singleEnd, displayedComponents: [.date, .hourAndMinute])
+                    
+                    // Package selector
+                    if let clientId = selectedClientId {
+                        if isLoadingPackages {
+                            HStack {
+                                ProgressView()
+                                Text("Loading packages...")
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else if clientPackages.isEmpty {
+                            Text("No available passes for this client")
+                                .foregroundStyle(.secondary)
+                                .font(.caption)
+                        } else {
+                            Picker("Pass/Package", selection: $selectedPackageId) {
+                                Text("Select a pass...").tag(nil as String?)
+                                ForEach(availablePackages) { package in
+                                    HStack {
+                                        Text(package.packageDisplayName)
+                                        Spacer()
+                                        Text("(\(package.lessonsRemaining) left)")
+                                    }
+                                    .tag(Optional(package.id))
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Book button
+                    Button {
+                        bookLesson()
+                    } label: {
+                        Text("Book Lesson")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(canBookLesson ? Color.accentColor : Color.gray)
+                            .foregroundStyle(.white)
+                            .cornerRadius(10)
+                    }
+                    .disabled(!canBookLesson)
+                    
+                    if let error = bookingError {
+                        Text(error)
+                            .foregroundStyle(.red)
+                            .font(.caption)
+                    }
+                }
+            }
+        } header: {
+            Text("Admin: Book for Client")
+        }
+    }
+    
+    private var availablePackages: [LessonPackage] {
+        clientPackages.filter { !$0.isExpired && $0.lessonsRemaining > 0 }
+    }
+    
+    private var canBookLesson: Bool {
+        guard let clientId = selectedClientId,
+              let packageId = selectedPackageId,
+              !clientId.isEmpty,
+              !packageId.isEmpty,
+              singleEnd > singleStart else {
+            return false
+        }
+        return true
+    }
+    
+    // MARK: - Admin Booking Functions
+    
+    private func loadClients() {
+        guard let trainerId = editingTrainerId else { return }
+        
+        isLoadingClients = true
+        Task {
+            do {
+                let clients = try await ClientsRepository().fetchClients(trainerId: trainerId)
+                await MainActor.run {
+                    self.allClients = clients
+                    self.isLoadingClients = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.bookingError = "Failed to load clients: \(error.localizedDescription)"
+                    self.isLoadingClients = false
+                }
+            }
+        }
+    }
+    
+    private func loadPackagesForClient(_ clientId: String) {
+        isLoadingPackages = true
+        bookingError = nil
+        selectedPackageId = nil
+        
+        Task {
+            do {
+                let packages = try await FirestoreService.shared.fetchClientPackages(clientId: clientId)
+                await MainActor.run {
+                    self.clientPackages = packages
+                    self.isLoadingPackages = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.bookingError = "Failed to load packages: \(error.localizedDescription)"
+                    self.clientPackages = []
+                    self.isLoadingPackages = false
+                }
+            }
+        }
+    }
+    
+    private func bookLesson() {
+        guard let clientId = selectedClientId,
+              let packageId = selectedPackageId else {
+            bookingError = "Please select a client and package"
+            return
+        }
+        
+        bookingError = nil
+        onBookLesson(clientId, singleStart, singleEnd, packageId)
+        dismiss()
     }
 
     private var singleSaveDisabled: Bool {

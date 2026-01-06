@@ -219,6 +219,8 @@ struct ScheduleView: View {
                 AvailabilityEditorSheet(
                     defaultDay: ctx.day,
                     defaultHour: ctx.hour,
+                    isAdmin: auth.isAdmin,
+                    editingTrainerId: viewModel.editingTrainerId,
                     onSaveSingle: { day, start, end, status in
                         Task {
                             await viewModel.setCustomSlot(on: day, startTime: start, endTime: end, status: status)
@@ -234,6 +236,17 @@ struct ScheduleView: View {
                                 dailyEndHour: dailyEndHour,
                                 slotDurationMinutes: durationMinutes,
                                 selectedDaysOfWeek: daysOfWeek
+                            )
+                            editorContext = nil
+                        }
+                    },
+                    onBookLesson: { clientId, startTime, endTime, packageId in
+                        Task {
+                            await viewModel.bookLessonForClient(
+                                clientId: clientId,
+                                startTime: startTime,
+                                endTime: endTime,
+                                packageId: packageId
                             )
                             editorContext = nil
                         }

@@ -348,6 +348,49 @@ final class ScheduleViewModel: ObservableObject {
             print("Failed to process availability: \(error)")
         }
     }
+    
+    // Admin function to book a lesson for a client
+    func bookLessonForClient(clientId: String, startTime: Date, endTime: Date, packageId: String) async {
+        guard let trainerId = editingTrainerId else {
+            print("No trainer selected for booking")
+            return
+        }
+        
+        do {
+            // First, create the slot if it doesn't exist
+            try await scheduleRepo.upsertSlot(
+                trainerId: trainerId,
+                startTime: startTime,
+                endTime: endTime,
+                status: .open
+            )
+            
+            // Get the slot ID (we need to fetch it back)
+            let slots = try await FirestoreService.shared.fetchTrainerSchedule(
+                trainerId: trainerId,
+                from: startTime,
+                to: Calendar.current.date(byAdding: .minute, value: 1, to: startTime) ?? startTime
+            )
+            
+            guard let slot = slots.first(where: { $0.startTime == startTime }) else {
+                print("Failed to find created slot")
+                return
+            }
+            
+            // Book the lesson using the admin booking function
+            try await FirestoreService.shared.adminBookLesson(
+                trainerId: trainerId,
+                slotId: slot.id,
+                clientId: clientId,
+                packageId: packageId
+            )
+            
+            print("Successfully booked lesson for client")
+            await loadWeek()
+        } catch {
+            print("Failed to book lesson for client: \(error)")
+        }
+    }
 
     private func buildCurrentWeek(anchor: Date) {
         let cal = Calendar.current
