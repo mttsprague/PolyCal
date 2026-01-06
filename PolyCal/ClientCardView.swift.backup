@@ -6,53 +6,7 @@
 //
 
 import SwiftUI
-
-enum ClientCardTab: String, CaseIterable, Identifiable {
-    case profile = "Profile"
-    case account = "Account"
-    case schedule = "Schedule"
-    case documents = "Documents"
-    
-    var id: String { rawValue }
-    
-    var icon: String {
-        switch self {
-        case .profile: return "person.fill"
-        case .account: return "creditcard.fill"
-        case .schedule: return "calendar"
-        case .documents: return "doc.fill"
-        }
-    }
-}
-
-struct BubbleTab: View {
-    let title: String
-    let icon: String
-    let isSelected: Bool
-    
-    var body: some View {
-        VStack(spacing: Spacing.xxs) {
-            Image(systemName: icon)
-                .font(.system(size: 18))
-                .foregroundStyle(isSelected ? .white : AppTheme.textSecondary)
-            
-            Text(title)
-                .font(.labelSmall)
-                .fontWeight(isSelected ? .semibold : .regular)
-                .foregroundStyle(isSelected ? .white : AppTheme.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, Spacing.sm)
-        .background(
-            isSelected ? AppTheme.primary : Color.clear
-        )
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(isSelected ? Color.clear : AppTheme.border, lineWidth: 1)
-        )
-    }
-}
+import Combine
 
 struct ClientCardView: View {
     let client: Client
@@ -60,30 +14,30 @@ struct ClientCardView: View {
     
     @StateObject private var viewModel = ClientCardViewModel()
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedTab: ClientCardTab = .profile
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(spacing: Spacing.lg) {
-                        // Client Header with Avatar
-                        clientHeader
-                            .padding(.top, Spacing.lg)
-                        
-                        // Contact Information (always visible)
-                        contactSection
-                        
-                        // Bubble Tab Selector
-                        bubbleTabs
-                            .padding(.horizontal, Spacing.lg)
-                        
-                        // Tab Content
-                        tabContent
-                    }
-                    .padding(.bottom, Spacing.xxxl)
+            ScrollView {
+                VStack(spacing: Spacing.xl) {
+                    // Client Header with Avatar
+                    clientHeader
+                    
+                    // Contact Information
+                    contactSection
+                    
+                    // Next/Current Lesson
+                    lessonSection
+                    
+                    // Account - Lesson Packages
+                    accountSection
+                    
+                    // Schedule - Upcoming & History
+                    scheduleSection
+                    
+                    // Documents
+                    documentsSection
                 }
-                .background(Color(UIColor.systemGroupedBackground))
+                .padding(.bottom, Spacing.xxxl)
             }
             .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
             .navigationTitle(client.firstName)
@@ -124,103 +78,62 @@ struct ClientCardView: View {
                 .font(.headingLarge)
                 .foregroundStyle(AppTheme.textPrimary)
         }
+        .padding(.top, Spacing.xl)
     }
     
     // MARK: - Contact Section
     private var contactSection: some View {
         CardView {
-            HStack(spacing: Spacing.md) {
-                // Email
-                Link(destination: URL(string: "mailto:\(client.emailAddress)")!) {
-                    Image(systemName: "envelope.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(AppTheme.primary)
-                }
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                Text("Contact Information")
+                    .font(.headingSmall)
+                    .foregroundStyle(AppTheme.textPrimary)
                 
-                // Phone
-                Link(destination: URL(string: "tel:\(client.phoneNumber)")!) {
-                    Image(systemName: "phone.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(AppTheme.primary)
-                }
-                
-                // Text Message
-                Link(destination: URL(string: "sms:\(client.phoneNumber)")!) {
-                    Image(systemName: "message.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(AppTheme.primary)
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(client.emailAddress)
-                        .font(.labelSmall)
-                        .foregroundStyle(AppTheme.textSecondary)
-                    Text(client.phoneNumber)
-                        .font(.labelSmall)
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-            }
-            .padding(Spacing.md)
-        }
-        .padding(.horizontal, Spacing.lg)
-    }
-    
-    // MARK: - Bubble Tabs
-    private var bubbleTabs: some View {
-        HStack(spacing: Spacing.xs) {
-            ForEach(ClientCardTab.allCases) { tab in
-                BubbleTab(
-                    title: tab.rawValue,
-                    icon: tab.icon,
-                    isSelected: selectedTab == tab
-                )
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.3)) {
-                        selectedTab = tab
+                VStack(spacing: Spacing.sm) {
+                    // Email
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text("Email")
+                            .font(.labelMedium)
+                            .foregroundStyle(AppTheme.textSecondary)
+                        
+                        Link(destination: URL(string: "mailto:\(client.emailAddress)")!) {
+                            HStack(spacing: Spacing.xs) {
+                                Image(systemName: "envelope.fill")
+                                    .font(.system(size: 14))
+                                Text(client.emailAddress)
+                                    .font(.bodyMedium)
+                            }
+                            .foregroundStyle(AppTheme.primary)
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    // Phone with Call/Text actions
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text("Phone")
+                            .font(.labelMedium)
+                            .foregroundStyle(AppTheme.textSecondary)
+                        
+                        HStack {
+                            HStack(spacing: Spacing.xs) {
+                                Image(systemName: "phone.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                Text(client.phoneNumber)
+                                    .font(.bodyMedium)
+                                    .foregroundStyle(AppTheme.textPrimary)
+                            }
+                            
+                            Spacer()
+                            
+                            InlinePhoneActions(phoneNumber: client.phoneNumber)
+                        }
                     }
                 }
             }
         }
-    }
-    
-    @ViewBuilder
-    private var tabContent: some View {
-        switch selectedTab {
-        case .profile:
-            profileContent
-        case .account:
-            accountContent
-        case .schedule:
-            scheduleContent
-        case .documents:
-            documentsContent
-        }
-    }
-    
-    private var profileContent: some View {
-        VStack(spacing: Spacing.md) {
-            lessonSection
-            athleteSection
-            notesSection
-        }
         .padding(.horizontal, Spacing.lg)
-    }
-    
-    private var accountContent: some View {
-        accountSection
-            .padding(.horizontal, Spacing.lg)
-    }
-    
-    private var scheduleContent: some View {
-        scheduleSection
-            .padding(.horizontal, Spacing.lg)
-    }
-    
-    private var documentsContent: some View {
-        documentsSection
-            .padding(.horizontal, Spacing.lg)
     }
     
     // MARK: - Lesson Section
@@ -277,79 +190,7 @@ struct ClientCardView: View {
                         }
                     }
                 }
-            }
-        }
-    }
-    
-    // MARK: - Athlete Section
-    private var athleteSection: some View {
-        Group {
-            if client.athleteFullName != nil {
-                CardView {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        Text("Athletes")
-                            .font(.headingSmall)
-                            .foregroundStyle(AppTheme.textPrimary)
-                        
-                        VStack(spacing: Spacing.sm) {
-                            if let athleteName = client.athleteFullName {
-                                HStack(spacing: Spacing.xs) {
-                                    Image(systemName: "figure.volleyball")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(AppTheme.textSecondary)
-                                    Text(athleteName)
-                                        .font(.bodyMedium)
-                                        .foregroundStyle(AppTheme.textPrimary)
-                                    if let position = client.athletePosition {
-                                        Text("•")
-                                            .foregroundStyle(AppTheme.textTertiary)
-                                        Text(position)
-                                            .font(.bodyMedium)
-                                            .foregroundStyle(AppTheme.textSecondary)
-                                    }
-                                }
-                            }
-                            
-                            if let athlete2Name = client.athlete2FullName {
-                                Divider()
-                                HStack(spacing: Spacing.xs) {
-                                    Image(systemName: "figure.volleyball")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(AppTheme.textSecondary)
-                                    Text(athlete2Name)
-                                        .font(.bodyMedium)
-                                        .foregroundStyle(AppTheme.textPrimary)
-                                    if let position = client.athlete2Position {
-                                        Text("•")
-                                            .foregroundStyle(AppTheme.textTertiary)
-                                        Text(position)
-                                            .font(.bodyMedium)
-                                            .foregroundStyle(AppTheme.textSecondary)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    // MARK: - Notes Section
-    private var notesSection: some View {
-        Group {
-            if let notes = client.notesForCoach, !notes.isEmpty {
-                CardView {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        Text("Notes")
-                            .font(.headingSmall)
-                            .foregroundStyle(AppTheme.textPrimary)
-                        
-                        Text(notes)
-                            .font(.bodyMedium)
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                }
+                .padding(.horizontal, Spacing.lg)
             }
         }
     }
@@ -359,7 +200,7 @@ struct ClientCardView: View {
         CardView {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 HStack {
-                    Text("Lesson Packages")
+                    Text("Account")
                         .font(.headingSmall)
                         .foregroundStyle(AppTheme.textPrimary)
                     
@@ -371,17 +212,12 @@ struct ClientCardView: View {
                     }
                 }
                 
-                if viewModel.packages.isEmpty && !viewModel.isLoadingPackages {
-                    VStack(spacing: Spacing.sm) {
-                        Image(systemName: "creditcard")
-                            .font(.system(size: 32))
-                            .foregroundStyle(AppTheme.textTertiary)
-                        Text("No lesson packages")
-                            .font(.bodyMedium)
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, Spacing.lg)
+                if viewModel.packages.isEmpty {
+                    Text("No lesson packages")
+                        .font(.bodyMedium)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, Spacing.md)
                 } else {
                     VStack(spacing: Spacing.sm) {
                         ForEach(viewModel.packages) { package in
@@ -394,6 +230,7 @@ struct ClientCardView: View {
                 }
             }
         }
+        .padding(.horizontal, Spacing.lg)
     }
     
     private func packageRow(_ package: LessonPackage) -> some View {
@@ -401,7 +238,6 @@ struct ClientCardView: View {
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(package.packageDisplayName)
                     .font(.bodyMedium)
-                    .fontWeight(.semibold)
                     .foregroundStyle(AppTheme.textPrimary)
                 
                 Text(package.statusText)
@@ -412,21 +248,15 @@ struct ClientCardView: View {
             Spacer()
             
             if package.lessonsRemaining > 0 && !package.isExpired {
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(package.lessonsRemaining)")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(AppTheme.primary)
-                    Text("left")
-                        .font(.labelSmall)
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
+                Text("\(package.lessonsRemaining)")
+                    .font(.headingMedium)
+                    .foregroundStyle(AppTheme.primary)
             } else {
                 Image(systemName: package.isExpired ? "clock.badge.xmark" : "checkmark.circle.fill")
-                    .font(.system(size: 24))
                     .foregroundStyle(AppTheme.textTertiary)
             }
         }
-        .padding(.vertical, Spacing.xs)
+        .padding(.vertical, Spacing.xxs)
     }
     
     private func packageStatusColor(_ package: LessonPackage) -> Color {
@@ -441,34 +271,33 @@ struct ClientCardView: View {
     
     // MARK: - Schedule Section
     private var scheduleSection: some View {
-        VStack(spacing: Spacing.md) {
-            // Upcoming Visits
-            CardView {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    HStack {
-                        Text("Upcoming Visits")
-                            .font(.headingSmall)
-                            .foregroundStyle(AppTheme.textPrimary)
-                        
-                        Spacer()
-                        
-                        if viewModel.isLoadingBookings {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        }
-                    }
+        CardView {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                HStack {
+                    Text("Schedule")
+                        .font(.headingSmall)
+                        .foregroundStyle(AppTheme.textPrimary)
                     
-                    if viewModel.upcomingBookings.isEmpty && !viewModel.isLoadingBookings {
-                        VStack(spacing: Spacing.sm) {
-                            Image(systemName: "calendar.badge.clock")
-                                .font(.system(size: 32))
-                                .foregroundStyle(AppTheme.textTertiary)
-                            Text("No upcoming visits")
-                                .font(.bodyMedium)
-                                .foregroundStyle(AppTheme.textSecondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, Spacing.md)
+                    Spacer()
+                    
+                    if viewModel.isLoadingBookings {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    }
+                }
+                
+                // Upcoming Visits
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("Upcoming Visits")
+                        .font(.labelMedium)
+                        .foregroundStyle(AppTheme.textSecondary)
+                    
+                    if viewModel.upcomingBookings.isEmpty {
+                        Text("No upcoming visits")
+                            .font(.bodyMedium)
+                            .foregroundStyle(AppTheme.textTertiary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, Spacing.sm)
                     } else {
                         VStack(spacing: Spacing.xs) {
                             ForEach(viewModel.upcomingBookings) { booking in
@@ -477,29 +306,25 @@ struct ClientCardView: View {
                         }
                     }
                 }
-            }
-            
-            // Visit History
-            CardView {
-                VStack(alignment: .leading, spacing: Spacing.md) {
+                
+                Divider()
+                    .padding(.vertical, Spacing.xs)
+                
+                // Visit History
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("Visit History")
-                        .font(.headingSmall)
-                        .foregroundStyle(AppTheme.textPrimary)
+                        .font(.labelMedium)
+                        .foregroundStyle(AppTheme.textSecondary)
                     
-                    if viewModel.pastBookings.isEmpty && !viewModel.isLoadingBookings {
-                        VStack(spacing: Spacing.sm) {
-                            Image(systemName: "clock.arrow.circlepath")
-                                .font(.system(size: 32))
-                                .foregroundStyle(AppTheme.textTertiary)
-                            Text("No past visits")
-                                .font(.bodyMedium)
-                                .foregroundStyle(AppTheme.textSecondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, Spacing.md)
+                    if viewModel.pastBookings.isEmpty {
+                        Text("No past visits")
+                            .font(.bodyMedium)
+                            .foregroundStyle(AppTheme.textTertiary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, Spacing.sm)
                     } else {
                         VStack(spacing: Spacing.xs) {
-                            ForEach(viewModel.pastBookings.prefix(10)) { booking in
+                            ForEach(viewModel.pastBookings) { booking in
                                 bookingRow(booking)
                             }
                         }
@@ -507,19 +332,19 @@ struct ClientCardView: View {
                 }
             }
         }
+        .padding(.horizontal, Spacing.lg)
     }
     
     private func bookingRow(_ booking: ClientBooking) -> some View {
         HStack(spacing: Spacing.sm) {
             Image(systemName: booking.isClassBooking == true ? "person.3.fill" : "figure.volleyball")
-                .font(.system(size: 16))
-                .foregroundStyle(AppTheme.primary)
-                .frame(width: 24)
+                .font(.system(size: 14))
+                .foregroundStyle(AppTheme.textSecondary)
+                .frame(width: 20)
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(booking.trainerName)
                     .font(.bodyMedium)
-                    .fontWeight(.medium)
                     .foregroundStyle(AppTheme.textPrimary)
                 
                 Text(booking.formattedDate)
@@ -530,7 +355,7 @@ struct ClientCardView: View {
             Spacer()
             
             Text(booking.duration)
-                .font(.labelMedium)
+                .font(.labelSmall)
                 .foregroundStyle(AppTheme.textTertiary)
         }
         .padding(.vertical, Spacing.xxs)
@@ -553,17 +378,12 @@ struct ClientCardView: View {
                     }
                 }
                 
-                if viewModel.documents.isEmpty && !viewModel.isLoadingDocuments {
-                    VStack(spacing: Spacing.sm) {
-                        Image(systemName: "doc.text")
-                            .font(.system(size: 32))
-                            .foregroundStyle(AppTheme.textTertiary)
-                        Text("No documents on file")
-                            .font(.bodyMedium)
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, Spacing.lg)
+                if viewModel.documents.isEmpty {
+                    Text("No documents on file")
+                        .font(.bodyMedium)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, Spacing.md)
                 } else {
                     VStack(spacing: Spacing.sm) {
                         ForEach(viewModel.documents) { document in
@@ -576,6 +396,7 @@ struct ClientCardView: View {
                 }
             }
         }
+        .padding(.horizontal, Spacing.lg)
     }
     
     private func documentRow(_ document: ClientDocument) -> some View {
@@ -588,7 +409,6 @@ struct ClientCardView: View {
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(document.displayName)
                     .font(.bodyMedium)
-                    .fontWeight(.medium)
                     .foregroundStyle(AppTheme.textPrimary)
                 
                 Text(document.uploadedAt.formatted(.relative(presentation: .named)))
