@@ -24,6 +24,8 @@ final class ScheduleViewModel: ObservableObject {
 
     @Published var mode: ScheduleMode = .myWeek
     @Published var selectedTrainerId: String?
+    @Published var allTrainers: [Trainer] = []
+    @Published var editingTrainerId: String? // For admin: which trainer's schedule to edit
 
     // State used by ScheduleView
     @Published var weekDays: [Date] = []
@@ -43,6 +45,7 @@ final class ScheduleViewModel: ObservableObject {
     @Published var participantsByClassId: [String: [ClassParticipant]] = [:]
 
     private let scheduleRepo = ScheduleRepository()
+    private let trainersRepo = TrainersRepository()
 
     init() {
         buildCurrentWeek(anchor: Date())
@@ -51,7 +54,18 @@ final class ScheduleViewModel: ObservableObject {
     // Allow the view to update the trainer id from Auth
     func setTrainerId(_ id: String) {
         myTrainerId = id
+        editingTrainerId = id // Default to editing own schedule
         Task { await loadWeek() }
+    }
+    
+    // Load all trainers (for admin selector)
+    func loadAllTrainers() async {
+        do {
+            allTrainers = try await trainersRepo.fetchAllTrainers()
+        } catch {
+            print("Error loading trainers: \(error)")
+            allTrainers = []
+        }
     }
 
     // Title for the current week range, e.g. "Oct 13–19, 2025" or "Sep 30 – Oct 6, 2025"
@@ -104,11 +118,16 @@ final class ScheduleViewModel: ObservableObject {
 
     func loadWeek() async {
         let trainerId: String
-        switch mode {
-        case .trainerDay(let id):
-            trainerId = id
-        default:
-            trainerId = myTrainerId
+        // If admin is editing another trainer's schedule, use editingTrainerId
+        if let editingId = editingTrainerId {
+            trainerId = editingId
+        } else {
+            switch mode {
+            case .trainerDay(let id):
+                trainerId = id
+            default:
+                trainerId = myTrainerId
+            }
         }
 
         // Determine week range based on selectedDate
@@ -249,7 +268,8 @@ final class ScheduleViewModel: ObservableObject {
 
         let calendar = Calendar.current
         var currentSlotStart = startTime
-        let trainerId = myTrainerId
+        // Use editingTrainerId if set (admin editing another trainer), otherwise use myTrainerId
+        let trainerId = editingTrainerId ?? myTrainerId
 
         while currentSlotStart < endTime {
             guard let nextHour = calendar.date(byAdding: .hour, value: 1, to: currentSlotStart) else { break }
@@ -281,7 +301,8 @@ final class ScheduleViewModel: ObservableObject {
         let cal = Calendar.current
         guard let start = cal.date(bySettingHour: hour, minute: 0, second: 0, of: day) else { return }
 
-        let trainerId = myTrainerId
+        // Use editingTrainerId if set (admin editing another trainer), otherwise use myTrainerId
+        let trainerId = editingTrainerId ?? myTrainerId
         do {
             try await scheduleRepo.deleteSlot(trainerId: trainerId, startTime: start)
             await loadWeek()
@@ -307,9 +328,13 @@ final class ScheduleViewModel: ObservableObject {
 
         let startStr = start.map { fmt.string(from: $0) }
         let endStr = end.map { fmt.string(from: $0) }
+        
+        // Use editingTrainerId if set (admin editing another trainer), otherwise nil (uses authenticated user)
+        let targetTrainerId = editingTrainerId != myTrainerId ? editingTrainerId : nil
 
         do {
             let result = try await FunctionsService.shared.processTrainerAvailability(
+                trainerId: targetTrainerId,
                 startDate: startStr,
                 endDate: endStr,
                 dailyStartHour: dailyStartHour,

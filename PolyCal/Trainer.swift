@@ -15,4 +15,5 @@ struct Trainer: Identifiable, Codable, Hashable {
     var photoURL: String?
     var imageUrl: String?
     var active: Bool = true
+    var admin: Bool = false
 }

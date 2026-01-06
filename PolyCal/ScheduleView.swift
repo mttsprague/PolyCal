@@ -61,6 +61,11 @@ struct ScheduleView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 header
+                
+                // Admin trainer selector
+                if auth.isAdmin {
+                    trainerSelectorView
+                }
 
                 WeekStrip(
                     title: viewModel.weekTitle,
@@ -183,6 +188,11 @@ struct ScheduleView: View {
             .task {
                 viewModel.setTrainerId(auth.userId ?? "trainer_demo")
                 await viewModel.loadWeek()
+                
+                // Load all trainers if admin
+                if auth.isAdmin {
+                    await viewModel.loadAllTrainers()
+                }
             }
             .onChange(of: auth.userId) { _, newValue in
                 viewModel.setTrainerId(newValue ?? "trainer_demo")
@@ -191,6 +201,13 @@ struct ScheduleView: View {
                 Task {
                     await auth.refreshTrainerProfileIfNeeded()
                     await viewModel.loadWeek()
+                }
+            }
+            .onChange(of: auth.isAdmin) { _, isAdmin in
+                if isAdmin {
+                    Task {
+                        await viewModel.loadAllTrainers()
+                    }
                 }
             }
             .onChange(of: viewModel.selectedDate) { _, _ in
@@ -312,7 +329,7 @@ struct ScheduleView: View {
                         .lineLimit(1)
 
                     if auth.isAuthenticated {
-                        Text("You")
+                        Text(auth.isAdmin ? "Admin" : "You")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -327,6 +344,34 @@ struct ScheduleView: View {
         }
         .buttonStyle(.plain)
         .padding(.top, 8)
+    }
+    
+    private var trainerSelectorView: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text("Editing Schedule For:")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            
+            Picker("Trainer", selection: Binding(
+                get: { viewModel.editingTrainerId ?? auth.userId ?? "" },
+                set: { newValue in
+                    viewModel.editingTrainerId = newValue
+                    Task { await viewModel.loadWeek() }
+                }
+            )) {
+                ForEach(viewModel.allTrainers) { trainer in
+                    Text(trainer.displayName).tag(trainer.id)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color(UIColor.systemGray6))
     }
 
     @ViewBuilder

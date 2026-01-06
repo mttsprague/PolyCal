@@ -22,6 +22,7 @@ final class AuthManager: ObservableObject {
     @Published var userEmail: String?
     @Published var errorMessage: String?
     @Published var isTrainer: Bool = false
+    @Published var isAdmin: Bool = false
 
     // Trainer profile fields (from /trainers/{uid})
     @Published var trainerDisplayName: String?
@@ -117,6 +118,7 @@ final class AuthManager: ObservableObject {
         do {
             try Auth.auth().signOut()
             self.isTrainer = false
+            self.isAdmin = false
             self.userId = nil
             self.userEmail = nil
             self.trainerDisplayName = nil
@@ -187,6 +189,7 @@ final class AuthManager: ObservableObject {
         guard isTrainer, let uid = Auth.auth().currentUser?.uid else {
             self.trainerDisplayName = nil
             self.trainerPhotoURLString = nil
+            self.isAdmin = false
             return
         }
         do {
@@ -194,6 +197,7 @@ final class AuthManager: ObservableObject {
             let snap = try await ref.getDocument()
             if let data = snap.data() {
                 self.trainerDisplayName = (data["name"] as? String) ?? self.trainerDisplayName
+                self.isAdmin = (data["admin"] as? Bool) ?? false
                 if let url = data["photoURL"] as? String, !url.isEmpty {
                     self.trainerPhotoURLString = url
                 } else if let url = data["avatarUrl"] as? String, !url.isEmpty {

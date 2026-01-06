@@ -84,6 +84,7 @@ final class FunctionsService {
     }
 
     func processTrainerAvailability(
+        trainerId: String? = nil,
         startDate: String? = nil,
         endDate: String? = nil,
         dailyStartHour: Int? = nil,
@@ -115,6 +116,7 @@ final class FunctionsService {
         var payload: [String: Any] = [
             "timezoneOffsetMinutes": tzMinutes
         ]
+        if let trainerId { payload["trainerId"] = trainerId }
         if let startDate { payload["startDate"] = startDate }
         if let endDate { payload["endDate"] = endDate }
         if let dailyStartHour { payload["dailyStartHour"] = dailyStartHour }
