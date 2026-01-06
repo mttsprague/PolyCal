@@ -197,9 +197,12 @@ final class FirestoreService {
     // MARK: - Schedule (write APIs)
     // Deterministic document ID per trainer per startTime (UTC, hour resolution)
     private func scheduleDocId(for start: Date) -> String {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
-        let comps = calendar.dateComponents([.year, .month, .day, .hour], from: start)
+        let calendar = Calendar(identifier: .gregorian)
+        let utcTimezone = TimeZone(secondsFromGMT: 0)!
+        var utcCalendar = calendar
+        utcCalendar.timeZone = utcTimezone
+        
+        let comps = utcCalendar.dateComponents([.year, .month, .day, .hour], from: start)
         let y = comps.year ?? 1970
         let m = comps.month ?? 1
         let d = comps.day ?? 1
