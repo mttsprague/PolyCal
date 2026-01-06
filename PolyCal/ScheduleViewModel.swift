@@ -354,6 +354,7 @@ final class ScheduleViewModel: ObservableObject {
         print("   - trainerId: \(editingTrainerId ?? "nil")")
         print("   - clientId: \(clientId)")
         print("   - startTime: \(startTime)")
+        print("   - endTime: \(endTime)")
         print("   - packageId: \(packageId)")
         
         guard let trainerId = editingTrainerId else {
@@ -370,13 +371,14 @@ final class ScheduleViewModel: ObservableObject {
                 endTime: endTime,
                 status: .open
             )
+            print("🎯 Step 1: Slot created successfully")
             
             print("🎯 Step 2: Calculating slot ID...")
             // Calculate the deterministic slot ID (same format as scheduleDocId)
             let slotId = generateScheduleDocId(for: startTime)
             print("   - slotId: \(slotId)")
             
-            print("🎯 Step 3: Booking with slotId: \(slotId)")
+            print("🎯 Step 3: Calling adminBookLesson...")
             // Book the lesson using the admin booking function
             try await FirestoreService.shared.adminBookLesson(
                 trainerId: trainerId,
@@ -384,12 +386,16 @@ final class ScheduleViewModel: ObservableObject {
                 clientId: clientId,
                 packageId: packageId
             )
+            print("🎯 Step 3: adminBookLesson completed")
             
             print("✅ Successfully booked lesson for client")
+            print("🔄 Reloading week data...")
             await loadWeek()
+            print("🔄 Week data reloaded")
             return true
         } catch {
             print("❌ Failed to book lesson for client: \(error)")
+            print("❌ Error details: \(error.localizedDescription)")
             return false
         }
     }
