@@ -350,45 +350,44 @@ final class ScheduleViewModel: ObservableObject {
     
     // Admin function to book a lesson for a client
     func bookLessonForClient(clientId: String, startTime: Date, endTime: Date, packageId: String) async -> Bool {
-        print("🎯 START bookLessonForClient")
+        print("🎯 START")
         
         guard let trainerId = editingTrainerId else {
-            print("❌ No trainer selected")
+            print("❌ No trainer")
             return false
         }
         
-        print("🎯 trainerId: \(trainerId)")
-        print("🎯 clientId: \(clientId)")
-        print("🎯 packageId: \(packageId)")
+        print("🎯 Have trainer")
         
         do {
-            print("🎯 Creating slot...")
+            print("🎯 Creating slot")
             try await scheduleRepo.upsertSlot(
                 trainerId: trainerId,
                 startTime: startTime,
                 endTime: endTime,
                 status: .open
             )
-            print("✅ Slot created")
+            print("✅ Slot OK")
             
+            print("🎯 Gen ID")
             let slotId = generateScheduleDocId(for: startTime)
-            print("🎯 slotId: \(slotId)")
+            print("✅ ID OK")
             
-            print("🎯 Booking lesson...")
+            print("🎯 Booking")
             try await FirestoreService.shared.adminBookLesson(
                 trainerId: trainerId,
                 slotId: slotId,
                 clientId: clientId,
                 packageId: packageId
             )
-            print("✅ Booking created")
+            print("✅ Booked")
             
-            print("🔄 Reloading...")
+            print("🔄 Reload")
             await loadWeek()
-            print("✅ Complete")
+            print("✅ Done")
             return true
         } catch {
-            print("❌ Error: \(error.localizedDescription)")
+            print("❌ Err")
             return false
         }
     }
