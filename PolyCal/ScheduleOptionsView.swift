@@ -133,6 +133,7 @@ struct ScheduleOptionsView: View {
                     Button("Close") { dismiss() }
                 }
             }
+        .navigationViewStyle(.stack)
         }
     }
 

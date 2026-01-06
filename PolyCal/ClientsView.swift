@@ -68,6 +68,7 @@ struct ClientsView: View {
                 ClientCardView(client: client, selectedBooking: nil)
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     private var header: some View {

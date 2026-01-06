@@ -135,6 +135,7 @@ struct DayScheduleView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
     
     private func handleSlotTap(_ slot: TrainerScheduleSlot) {

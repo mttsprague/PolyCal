@@ -242,6 +242,7 @@ struct MoreView: View {
             .navigationTitle("Account")
             .navigationBarTitleDisplayMode(.large)
         }
+        .navigationViewStyle(.stack)
     }
     
     private var initials: String {

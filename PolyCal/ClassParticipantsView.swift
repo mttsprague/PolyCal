@@ -68,6 +68,7 @@ struct ClassParticipantsView: View {
                 ParticipantClientCardSheet(participantUserId: participant.userId)
             }
         }
+        .navigationViewStyle(.stack)
     }
 }
 

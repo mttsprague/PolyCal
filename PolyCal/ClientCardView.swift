@@ -97,6 +97,7 @@ struct ClientCardView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
         .task {
             await viewModel.loadClientData(clientId: client.id, selectedBooking: selectedBooking)
         }

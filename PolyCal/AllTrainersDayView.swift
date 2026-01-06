@@ -170,6 +170,7 @@ struct AllTrainersDayView: View {
                 Task { await viewModel.reload(for: newValue) }
             }
         }
+        .navigationViewStyle(.stack)
     }
     
     private func handleSlotTap(_ slot: TrainerScheduleSlot) {

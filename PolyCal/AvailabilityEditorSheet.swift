@@ -115,6 +115,7 @@ struct AvailabilityEditorSheet: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     private var singleSection: some View {
