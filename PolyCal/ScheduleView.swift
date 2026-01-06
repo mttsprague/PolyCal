@@ -330,35 +330,55 @@ struct ScheduleView: View {
         }
     }
 
+    private func refreshSchedule() async {
+        print("🔄 Refreshing schedule...")
+        await viewModel.loadWeek()
+        print("✅ Schedule refreshed")
+    }
+
     private var header: some View {
-        Button {
-            showOptions = true
-        } label: {
-            HStack(spacing: 12) {
-                avatarView
-                    .frame(width: 36, height: 36)
+        HStack(spacing: 12) {
+            Button {
+                showOptions = true
+            } label: {
+                HStack(spacing: 12) {
+                    avatarView
+                        .frame(width: 36, height: 36)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(auth.trainerDisplayName ?? "My Schedule")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(auth.trainerDisplayName ?? "My Schedule")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
 
-                    if auth.isAuthenticated {
-                        Text(auth.isAdmin ? "Admin" : "You")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        if auth.isAuthenticated {
+                            Text(auth.isAdmin ? "Admin" : "You")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
-
-                Spacer()
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-            .background(.clear)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            
+            Spacer()
+            
+            // Refresh button
+            Button {
+                Task {
+                    await refreshSchedule()
+                }
+            } label: {
+                Image(systemName: "arrow.clockwise.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(AppTheme.primary)
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal)
+        .padding(.vertical, 8)
         .padding(.top, 8)
     }
     
