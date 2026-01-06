@@ -634,27 +634,17 @@ struct ScheduleView: View {
         let slot: TrainerScheduleSlot
 
         var body: some View {
-            HStack(spacing: 8) {
-                if slot.isClass {
-                    Image(systemName: "figure.volleyball")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(slot.visualColor)
-                } else {
-                    Circle()
-                        .fill(slot.visualColor)
-                        .frame(width: 8, height: 8)
-                }
+            VStack(spacing: 2) {
                 Text(slot.displayTitle)
-                    .font(.caption)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer()
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
             }
-            .padding(8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(slot.visualColor.opacity(0.08))
+                    .fill(slot.visualColor)
             )
         }
     }
