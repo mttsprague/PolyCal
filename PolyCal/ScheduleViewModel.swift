@@ -371,24 +371,16 @@ final class ScheduleViewModel: ObservableObject {
                 status: .open
             )
             
-            print("🎯 Step 2: Fetching slot...")
-            // Get the slot ID (we need to fetch it back)
-            let slots = try await FirestoreService.shared.fetchTrainerSchedule(
-                trainerId: trainerId,
-                from: startTime,
-                to: Calendar.current.date(byAdding: .minute, value: 1, to: startTime) ?? startTime
-            )
+            print("🎯 Step 2: Calculating slot ID...")
+            // Calculate the deterministic slot ID (same format as scheduleDocId)
+            let slotId = generateScheduleDocId(for: startTime)
+            print("   - slotId: \(slotId)")
             
-            guard let slot = slots.first(where: { $0.startTime == startTime }) else {
-                print("❌ Failed to find created slot")
-                return false
-            }
-            
-            print("🎯 Step 3: Booking with slotId: \(slot.id)")
+            print("🎯 Step 3: Booking with slotId: \(slotId)")
             // Book the lesson using the admin booking function
             try await FirestoreService.shared.adminBookLesson(
                 trainerId: trainerId,
-                slotId: slot.id,
+                slotId: slotId,
                 clientId: clientId,
                 packageId: packageId
             )
@@ -400,6 +392,18 @@ final class ScheduleViewModel: ObservableObject {
             print("❌ Failed to book lesson for client: \(error)")
             return false
         }
+    }
+    
+    // Generate deterministic schedule document ID (same logic as FirestoreService)
+    private func generateScheduleDocId(for start: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        let comps = calendar.dateComponents([.year, .month, .day, .hour], from: start)
+        let y = comps.year ?? 1970
+        let m = comps.month ?? 1
+        let d = comps.day ?? 1
+        let h = comps.hour ?? 0
+        return String(format: "%04d-%02d-%02dT%02d", y, m, d, h)
     }
 
     private func buildCurrentWeek(anchor: Date) {
