@@ -14,7 +14,7 @@ struct AvailabilityEditorSheet: View {
     let editingTrainerId: String?
     let onSaveSingle: (Date, Date, Date, TrainerScheduleSlot.Status) -> Void
     let onSaveOngoing: (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void
-    let onBookLesson: (String, Date, Date, String) async -> Bool // clientId, startTime, endTime, packageId -> success
+    let onBookLesson: (String, TimeInterval, TimeInterval, String) async -> Bool // clientId, startTime, endTime, packageId -> success
 
     @Environment(\.dismiss) private var dismiss
 
@@ -61,7 +61,7 @@ struct AvailabilityEditorSheet: View {
         editingTrainerId: String? = nil,
         onSaveSingle: @escaping (Date, Date, Date, TrainerScheduleSlot.Status) -> Void,
         onSaveOngoing: @escaping (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void,
-        onBookLesson: @escaping (String, Date, Date, String) async -> Bool = { _, _, _, _ in false }
+        onBookLesson: @escaping (String, TimeInterval, TimeInterval, String) async -> Bool = { _, _, _, _ in false }
     ) {
         self.defaultDay = defaultDay
         self.defaultHour = defaultHour
@@ -445,8 +445,12 @@ struct AvailabilityEditorSheet: View {
         isBooking = true
         bookingError = nil
         
+        // Convert dates to TimeIntervals to avoid memory corruption
+        let startInterval = singleStart.timeIntervalSinceReferenceDate
+        let endInterval = singleEnd.timeIntervalSinceReferenceDate
+        
         // Call the async booking function and wait for result
-        let success = await onBookLesson(clientId, singleStart, singleEnd, packageId)
+        let success = await onBookLesson(clientId, startInterval, endInterval, packageId)
         
         isBooking = false
         

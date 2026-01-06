@@ -240,8 +240,10 @@ struct ScheduleView: View {
                             editorContext = nil
                         }
                     },
-                    onBookLesson: { clientId, startTime, endTime, packageId in
+                    onBookLesson: { clientId, startInterval, endInterval, packageId in
                         print("📋 ScheduleView: Received booking request")
+                        let startTime = Date(timeIntervalSinceReferenceDate: startInterval)
+                        let endTime = Date(timeIntervalSinceReferenceDate: endInterval)
                         let success = await viewModel.bookLessonForClient(
                             clientId: clientId,
                             startTime: startTime,
