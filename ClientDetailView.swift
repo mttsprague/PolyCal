@@ -470,6 +470,18 @@ struct ClientDetailView: View {
 
 // MARK: - Data Models
 
+struct ClientBooking: Identifiable {
+    let id: String
+    let trainerId: String
+    let trainerName: String
+    let startTime: Date
+    let endTime: Date
+    let status: String
+    let bookedAt: Date?
+    let isClassBooking: Bool?
+    let classId: String?
+}
+
 struct ClientClass: Identifiable {
     let id: String
     let startTime: Date
@@ -567,19 +579,34 @@ class ClientScheduleLoader: ObservableObject {
             }
             
             // Load classes where this client is registered
+            print("🔍 Loading classes for client: \(clientId)")
             let classesSnapshot = try await db.collectionGroup("participants")
                 .whereField("userId", isEqualTo: clientId)
                 .getDocuments()
             
-            // Get class IDs
-            let classIds = Set(classesSnapshot.documents.compactMap { $0.reference.parent.parent?.documentID })
+            print("📊 Found \(classesSnapshot.documents.count) participant records")
             
-            // Load class details
+            // Get class IDs from participant documents
+            let classIds = Set(classesSnapshot.documents.compactMap { doc -> String? in
+                let classId = doc.reference.parent.parent?.documentID
+                if let id = classId {
+                    print("  - Found class ID: \(id)")
+                }
+                return classId
+            })
+            
+            print("🎓 Total unique classes: \(classIds.count)")
+            
+            // Load class details for each class
             for classId in classIds {
-                if let classDoc = try? await db.collection("classes").document(classId).getDocument(),
-                   let classData = classDoc.data(),
-                   let startTs = classData["startTime"] as? Timestamp,
-                   let endTs = classData["endTime"] as? Timestamp {
+                do {
+                    let classDoc = try await db.collection("classes").document(classId).getDocument()
+                    guard let classData = classDoc.data(),
+                          let startTs = classData["startTime"] as? Timestamp,
+                          let endTs = classData["endTime"] as? Timestamp else {
+                        print("  ⚠️ Missing required fields for class \(classId)")
+                        continue
+                    }
                     
                     let startTime = startTs.dateValue()
                     let endTime = endTs.dateValue()
@@ -606,10 +633,14 @@ class ClientScheduleLoader: ObservableObject {
                     )
                     
                     if startTime >= now {
+                        print("  ✅ Added upcoming class: \(title) at \(startTime)")
                         upcoming.append(.classItem(classItem))
                     } else {
+                        print("  ✅ Added past class: \(title) at \(startTime)")
                         past.append(.classItem(classItem))
                     }
+                } catch {
+                    print("  ❌ Error loading class \(classId): \(error)")
                 }
             }
             
@@ -617,8 +648,12 @@ class ClientScheduleLoader: ObservableObject {
             self.upcomingEvents = upcoming.sorted { $0.date < $1.date }
             self.pastEvents = past.sorted { $0.date > $1.date }
             
+            print("📅 Final schedule summary:")
+            print("  - Upcoming events: \(self.upcomingEvents.count) (\(upcoming.filter { if case .lesson = $0 { return true }; return false }.count) lessons, \(upcoming.filter { if case .classItem = $0 { return true }; return false }.count) classes)")
+            print("  - Past events: \(self.pastEvents.count) (\(past.filter { if case .lesson = $0 { return true }; return false }.count) lessons, \(past.filter { if case .classItem = $0 { return true }; return false }.count) classes)")
+            
         } catch {
-            print("Error loading client schedule: \(error)")
+            print("❌ Error loading client schedule: \(error)")
         }
         
         isLoading = false
