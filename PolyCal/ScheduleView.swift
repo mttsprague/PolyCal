@@ -84,7 +84,7 @@ struct ScheduleView: View {
                 HStack(spacing: 0) {
                     // Empty corner space above hour labels
                     Color.clear
-                        .frame(width: timeColWidth, height: headerRowHeight + gridHeaderVPad * 2)
+                        .frame(width: timeColWidth, height: headerRowHeight)
                         .background(Color(UIColor.systemGray6))
                     
                     // Day headers that scroll with grid
@@ -99,12 +99,11 @@ struct ScheduleView: View {
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
-                                .frame(width: dayColumnWidth)
+                                .frame(width: dayColumnWidth, height: headerRowHeight)
                                 .padding(.horizontal, 6)
                                 .multilineTextAlignment(.center)
                             }
                         }
-                        .padding(.vertical, gridHeaderVPad)
                         .background(
                             GeometryReader { geo in
                                 Color.clear.preference(
@@ -119,8 +118,8 @@ struct ScheduleView: View {
                         scrollOffset = value
                     }
                 }
-                .frame(height: headerRowHeight + gridHeaderVPad * 2)
-                .background(Color(UIColor.systemBackground))
+                .frame(height: headerRowHeight)
+                .background(Color(UIColor.systemGray6))
 
                 ZStack(alignment: .topLeading) {
                     ScrollViewReader { verticalScrollProxy in
