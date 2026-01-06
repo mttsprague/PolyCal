@@ -91,69 +91,69 @@ struct ScheduleView: View {
                                 .frame(width: timeColWidth)
                                 .background(Color(UIColor.systemGray6))
 
-                            ScrollViewReader { scrollProxy in
-                                ScrollView(.horizontal, showsIndicators: true) {
-                                    VStack(spacing: 0) {
-                                        HStack(spacing: columnSpacing) {
-                                            ForEach(viewModel.weekDays, id: \.self) { day in
-                                                VStack(spacing: 2) {
-                                                    Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                                                        .font(.caption2.weight(.semibold))
-                                                        .foregroundStyle(.secondary)
-                                                    Text(day, format: .dateTime.month(.abbreviated).day())
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
-                                                }
-                                                .frame(width: dayColumnWidth)
-                                                .padding(.horizontal, 6) // match cell padding
-                                                .multilineTextAlignment(.center)
-                                                .id(day)
-                                            }
-                                        }
-                                        .padding(.vertical, gridHeaderVPad)
-                                        // Removed extra leading/trailing so header aligns with grid below
-
+                                ScrollViewReader { scrollProxy in
+                                    ScrollView(.horizontal, showsIndicators: true) {
                                         VStack(spacing: 0) {
-                                            ForEach(viewModel.visibleHours, id: \.self) { hour in
-                                                HStack(spacing: columnSpacing) {
-                                                    ForEach(viewModel.weekDays, id: \.self) { day in
-                                                        HourDayCell(
-                                                            day: day,
-                                                            hour: hour,
-                                                            slotsForDay: viewModel.slotsByDay[DateOnly(day)] ?? [],
-                                                            dayColumnWidth: dayColumnWidth,
-                                                            rowHeight: rowHeight,
-                                                            horizontalPadding: 6,
-                                                            onEmptyTap: {
-                                                                editorContext = EditorContext(day: day, hour: hour)
-                                                            },
-                                                            onSlotTap: { slot in
-                                                                handleSlotTap(slot, defaultDay: day, defaultHour: hour)
-                                                            },
-                                                            onSetStatus: { status in
-                                                                Task { await viewModel.setSlotStatus(on: day, hour: hour, status: status) }
-                                                            },
-                                                            onClear: {
-                                                                Task { await viewModel.clearSlot(on: day, hour: hour) }
-                                                            }
-                                                        )
+                                            HStack(spacing: columnSpacing) {
+                                                ForEach(viewModel.weekDays, id: \.self) { day in
+                                                    VStack(spacing: 2) {
+                                                        Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
+                                                            .font(.caption2.weight(.semibold))
+                                                            .foregroundStyle(.secondary)
+                                                        Text(day, format: .dateTime.month(.abbreviated).day())
+                                                            .font(.caption)
+                                                            .foregroundStyle(.secondary)
                                                     }
+                                                    .frame(width: dayColumnWidth)
+                                                    .padding(.horizontal, 6) // match cell padding
+                                                    .multilineTextAlignment(.center)
+                                                    .id(day)
                                                 }
-                                                .padding(.vertical, rowVerticalPadding)
                                             }
+                                            .padding(.vertical, gridHeaderVPad)
+                                            // Removed extra leading/trailing so header aligns with grid below
+
+                                            VStack(spacing: 0) {
+                                                ForEach(viewModel.visibleHours, id: \.self) { hour in
+                                                    HStack(spacing: columnSpacing) {
+                                                        ForEach(viewModel.weekDays, id: \.self) { day in
+                                                            HourDayCell(
+                                                                day: day,
+                                                                hour: hour,
+                                                                slotsForDay: viewModel.slotsByDay[DateOnly(day)] ?? [],
+                                                                dayColumnWidth: dayColumnWidth,
+                                                                rowHeight: rowHeight,
+                                                                horizontalPadding: 6,
+                                                                onEmptyTap: {
+                                                                    editorContext = EditorContext(day: day, hour: hour)
+                                                                },
+                                                                onSlotTap: { slot in
+                                                                    handleSlotTap(slot, defaultDay: day, defaultHour: hour)
+                                                                },
+                                                                onSetStatus: { status in
+                                                                    Task { await viewModel.setSlotStatus(on: day, hour: hour, status: status) }
+                                                                },
+                                                                onClear: {
+                                                                    Task { await viewModel.clearSlot(on: day, hour: hour) }
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                                    .padding(.vertical, rowVerticalPadding)
+                                                }
+                                            }
+                                            .padding(.bottom, 8)
                                         }
-                                        .padding(.bottom, 8)
+                                    }
+                                    .onAppear {
+                                        scrollToCurrentDay(scrollProxy: scrollProxy)
+                                    }
+                                    .onChange(of: viewModel.selectedDate) { _, _ in
+                                        scrollToCurrentDay(scrollProxy: scrollProxy)
                                     }
                                 }
-                                .onAppear {
-                                    scrollToCurrentDay(scrollProxy: scrollProxy)
-                                }
-                                .onChange(of: viewModel.selectedDate) { _, _ in
-                                    scrollToCurrentDay(scrollProxy: scrollProxy)
-                                }
-                            }
-                        } // <-- MISSING CLOSURE ADDED BELOW TO CLOSE HSTACK
-                        } // closes HStack(spacing: 0)
+                            } // <-- close HStack(spacing: 0)
+                        }
                         .background(Color(UIColor.systemGray6))
                         .onAppear {
                             scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
