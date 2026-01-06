@@ -77,51 +77,66 @@ struct ScheduleView: View {
                 .padding(.top, 2)
                 .padding(.bottom, 4)
 
-                ZStack(alignment: .topLeading) {
-                    ScrollViewReader { verticalScrollProxy in
-                        ScrollView(.vertical, showsIndicators: true) {
-                            HStack(spacing: 0) {
-                                VStack(spacing: 0) {
-                                    Color.clear
-                                        .frame(height: headerRowHeight + gridHeaderVPad * 2)
-
-                                    ForEach(viewModel.visibleHours, id: \.self) { hour in
-                                        Text(hourLabel(hour))
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                            .frame(maxWidth: .infinity, alignment: .trailing)
-                                            .padding(.trailing, 6)
-                                            .frame(height: rowHeight)
-                                            .background(Color(UIColor.systemGray6))
-                                            .padding(.vertical, rowVerticalPadding)
-                                            .id("hour-\(hour)")
+                VStack(spacing: 0) {
+                    // Fixed header row with day names
+                    HStack(spacing: 0) {
+                        // Empty space above hour labels
+                        Color.clear
+                            .frame(width: timeColWidth, height: headerRowHeight + gridHeaderVPad * 2)
+                            .background(Color(UIColor.systemGray6))
+                        
+                        // Scrollable day headers
+                        GeometryReader { geo in
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: columnSpacing) {
+                                    ForEach(viewModel.weekDays, id: \.self) { day in
+                                        VStack(spacing: 2) {
+                                            Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
+                                                .font(.caption2.weight(.semibold))
+                                                .foregroundStyle(.secondary)
+                                            Text(day, format: .dateTime.month(.abbreviated).day())
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .frame(width: dayColumnWidth)
+                                        .padding(.horizontal, 6)
+                                        .multilineTextAlignment(.center)
                                     }
                                 }
-                                .frame(width: timeColWidth)
-                                .background(Color(UIColor.systemGray6))
+                                .padding(.vertical, gridHeaderVPad)
+                            }
+                            .scrollDisabled(true)
+                            .simultaneousGesture(
+                                DragGesture()
+                                    .onChanged { _ in }
+                            )
+                        }
+                    }
+                    .background(Color(UIColor.systemBackground))
+                    
+                    // Scrollable content
+                    ZStack(alignment: .topLeading) {
+                        ScrollViewReader { verticalScrollProxy in
+                            ScrollView(.vertical, showsIndicators: true) {
+                                HStack(spacing: 0) {
+                                    VStack(spacing: 0) {
+                                        ForEach(viewModel.visibleHours, id: \.self) { hour in
+                                            Text(hourLabel(hour))
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                                .frame(maxWidth: .infinity, alignment: .trailing)
+                                                .padding(.trailing, 6)
+                                                .frame(height: rowHeight)
+                                                .background(Color(UIColor.systemGray6))
+                                                .padding(.vertical, rowVerticalPadding)
+                                                .id("hour-\(hour)")
+                                        }
+                                    }
+                                    .frame(width: timeColWidth)
+                                    .background(Color(UIColor.systemGray6))
 
-                                ScrollViewReader { scrollProxy in
-                                    ScrollView(.horizontal, showsIndicators: true) {
-                                        VStack(spacing: 0) {
-                                            HStack(spacing: columnSpacing) {
-                                                ForEach(viewModel.weekDays, id: \.self) { day in
-                                                    VStack(spacing: 2) {
-                                                        Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                                                            .font(.caption2.weight(.semibold))
-                                                            .foregroundStyle(.secondary)
-                                                        Text(day, format: .dateTime.month(.abbreviated).day())
-                                                            .font(.caption)
-                                                            .foregroundStyle(.secondary)
-                                                    }
-                                                    .frame(width: dayColumnWidth)
-                                                    .padding(.horizontal, 6) // match cell padding
-                                                    .multilineTextAlignment(.center)
-                                                    .id(day)
-                                                }
-                                            }
-                                            .padding(.vertical, gridHeaderVPad)
-                                            // Removed extra leading/trailing so header aligns with grid below
-
+                                    ScrollViewReader { scrollProxy in
+                                        ScrollView(.horizontal, showsIndicators: true) {
                                             VStack(spacing: 0) {
                                                 ForEach(viewModel.visibleHours, id: \.self) { hour in
                                                     HStack(spacing: columnSpacing) {
@@ -153,33 +168,35 @@ struct ScheduleView: View {
                                             }
                                             .padding(.bottom, 8)
                                         }
+                                        .onAppear {
+                                            scrollToCurrentDay(scrollProxy: scrollProxy)
+                                        }
+                                        .onChange(of: viewModel.selectedDate) { _, _ in
+                                            scrollToCurrentDay(scrollProxy: scrollProxy)
+                                        }
                                     }
-                                    .onAppear {
-                                        scrollToCurrentDay(scrollProxy: scrollProxy)
-                                    }
-                                    .onChange(of: viewModel.selectedDate) { _, _ in
-                                        scrollToCurrentDay(scrollProxy: scrollProxy)
-                                    }
-                                }
-                            } // <-- close HStack(spacing: 0)
+                                } // <-- close HStack(spacing: 0)
+                            }
+                            .background(Color(UIColor.systemGray6))
+                            .onAppear {
+                                scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
+                            }
                         }
-                        .background(Color(UIColor.systemGray6))
-                        .onAppear {
-                            scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
-                        }
-                    }
 
-                    TimelineView(.everyMinute) { context in
-                        if let y = currentTimeYOffset(for: context.date,
-                                                      firstHour: viewModel.visibleHours.first,
-                                                      rowHeight: rowHeight,
-                                                      rowVerticalPadding: rowVerticalPadding) {
-                            Rectangle()
-                                .fill(Color.red)
-                                .frame(height: 2)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .offset(x: 0, y: (headerRowHeight + gridHeaderVPad * 2) + y)
-                                .accessibilityHidden(true)
+                        }
+
+                        TimelineView(.everyMinute) { context in
+                            if let y = currentTimeYOffset(for: context.date,
+                                                          firstHour: viewModel.visibleHours.first,
+                                                          rowHeight: rowHeight,
+                                                          rowVerticalPadding: rowVerticalPadding) {
+                                Rectangle()
+                                    .fill(Color.red)
+                                    .frame(height: 2)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .offset(x: 0, y: y)
+                                    .accessibilityHidden(true)
+                            }
                         }
                     }
                 }
