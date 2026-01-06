@@ -110,9 +110,6 @@ struct AvailabilityEditorSheet: View {
             // Ensure initial values obey the rules on first appearance
             .onAppear {
                 snapAndSyncTimes()
-                print("🎯 AvailabilityEditorSheet opened")
-                print("   - isAdmin: \(isAdmin)")
-                print("   - editingTrainerId: \(editingTrainerId ?? "nil")")
                 if isAdmin {
                     loadClients()
                 }

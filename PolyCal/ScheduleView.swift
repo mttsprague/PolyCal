@@ -216,7 +216,6 @@ struct ScheduleView: View {
             .sheet(item: $editorContext, onDismiss: {
                 editorContext = nil
             }) { ctx in
-                let _ = print("📋 Opening AvailabilityEditorSheet with auth.isAdmin = \(auth.isAdmin)")
                 AvailabilityEditorSheet(
                     defaultDay: ctx.day,
                     defaultHour: ctx.hour,

@@ -200,12 +200,6 @@ final class AuthManager: ObservableObject {
                 // Check both "isAdmin" and "admin" for backwards compatibility
                 self.isAdmin = (data["isAdmin"] as? Bool) ?? (data["admin"] as? Bool) ?? false
                 
-                // Debug logging
-                print("🔐 AuthManager: Loaded trainer profile for \(uid)")
-                print("   - isAdmin: \(self.isAdmin)")
-                print("   - isAdmin field in Firestore: \(data["isAdmin"] ?? "nil")")
-                print("   - admin field in Firestore: \(data["admin"] ?? "nil")")
-                
                 if let url = data["photoURL"] as? String, !url.isEmpty {
                     self.trainerPhotoURLString = url
                 } else if let url = data["avatarUrl"] as? String, !url.isEmpty {
@@ -213,7 +207,6 @@ final class AuthManager: ObservableObject {
                 }
             }
         } catch {
-            print("⚠️ AuthManager: Error loading trainer profile: \(error.localizedDescription)")
             // Leave previous values; optionally surface error
         }
         #endif
