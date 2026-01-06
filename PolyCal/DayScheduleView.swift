@@ -12,8 +12,13 @@ struct DayScheduleView: View {
     @EnvironmentObject private var auth: AuthManager
     @ObservedObject var viewModel: ScheduleViewModel
     
-    // Client detail sheet with identifiable item
-    @State private var clientSheetContext: Client?
+    // Client card sheet context
+    private struct ClientCardContext: Identifiable {
+        let id = UUID()
+        let client: Client
+        let booking: ClientBooking?
+    }
+    @State private var clientCardContext: ClientCardContext?
     
     // Class participants sheet
     @State private var selectedClassId: String?
@@ -116,9 +121,8 @@ struct DayScheduleView: View {
                         .font(.headline)
                 }
             }
-            .sheet(item: $clientSheetContext) { client in
-                ClientDetailSheet(client: client)
-                    .presentationDetents([.medium, .large])
+            .sheet(item: $clientCardContext) { context in
+                ClientCardView(client: context.client, selectedBooking: context.booking)
             }
             .sheet(isPresented: $classParticipantsShown) {
                 if let classId = selectedClassId, let className = selectedClassName {
@@ -150,14 +154,27 @@ struct DayScheduleView: View {
             return
         }
         
-        // Handle regular client booking
+        // Handle regular client booking - show ClientCardView
         if slot.isBooked, let clientId = slot.clientId {
             // Check cache first
-            if let cached = viewModel.clientsById[clientId] {
-                self.clientSheetContext = cached
+            if let client = viewModel.clientsById[clientId] {
+                // Create booking info from slot
+                let booking = ClientBooking(
+                    id: slot.id,
+                    trainerId: slot.trainerId,
+                    trainerName: auth.trainerDisplayName ?? "Trainer",
+                    startTime: slot.startTime,
+                    endTime: slot.endTime,
+                    status: "confirmed",
+                    bookedAt: slot.bookedAt,
+                    isClassBooking: slot.isClassBooking,
+                    classId: slot.classId
+                )
+                
+                self.clientCardContext = ClientCardContext(client: client, booking: booking)
             } else {
                 // Show placeholder if not cached
-                self.clientSheetContext = Client(
+                let placeholderClient = Client(
                     id: clientId,
                     firstName: slot.clientName ?? "Booked",
                     lastName: "",
@@ -165,6 +182,20 @@ struct DayScheduleView: View {
                     phoneNumber: "",
                     photoURL: nil
                 )
+                
+                let booking = ClientBooking(
+                    id: slot.id,
+                    trainerId: slot.trainerId,
+                    trainerName: auth.trainerDisplayName ?? "Trainer",
+                    startTime: slot.startTime,
+                    endTime: slot.endTime,
+                    status: "confirmed",
+                    bookedAt: slot.bookedAt,
+                    isClassBooking: slot.isClassBooking,
+                    classId: slot.classId
+                )
+                
+                self.clientCardContext = ClientCardContext(client: placeholderClient, booking: booking)
             }
         }
     }

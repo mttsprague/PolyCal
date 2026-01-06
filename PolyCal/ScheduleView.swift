@@ -36,8 +36,13 @@ struct ScheduleView: View {
     @State private var navigateToMyDay = false
     @State private var navigateToAllTrainersDay = false
 
-    // Client detail sheet with identifiable item
-    @State private var clientSheetContext: Client?
+    // Client card sheet context
+    private struct ClientCardContext: Identifiable {
+        let id = UUID()
+        let client: Client
+        let booking: ClientBooking?
+    }
+    @State private var clientCardContext: ClientCardContext?
 
 
     // Layout constants
@@ -247,9 +252,8 @@ struct ScheduleView: View {
                 AllTrainersDayView(scheduleViewModel: viewModel)
                     .environmentObject(auth)
             }
-            .sheet(item: $clientSheetContext) { client in
-                ClientDetailSheet(client: client)
-                    .presentationDetents([.medium, .large])
+            .sheet(item: $clientCardContext) { context in
+                ClientCardView(client: context.client, selectedBooking: context.booking)
             }
             .sheet(item: $classSheetContext) { context in
                 ClassParticipantsView(
@@ -426,7 +430,18 @@ struct ScheduleView: View {
         if slot.isBooked, let clientId = slot.clientId {
             // Check cache first
             if let cached = viewModel.clientsById[clientId] {
-                self.clientSheetContext = cached
+                let booking = ClientBooking(
+                    id: slot.id,
+                    trainerId: slot.trainerId,
+                    trainerName: auth.trainerDisplayName ?? "Trainer",
+                    startTime: slot.startTime,
+                    endTime: slot.endTime,
+                    status: "confirmed",
+                    bookedAt: slot.bookedAt,
+                    isClassBooking: slot.isClassBooking,
+                    classId: slot.classId
+                )
+                self.clientCardContext = ClientCardContext(client: cached, booking: booking)
                 return
             }
 
@@ -434,20 +449,33 @@ struct ScheduleView: View {
             Task {
                 let fetched = try? await FirestoreService.shared.fetchClient(by: clientId)
                 await MainActor.run {
-                    if let client = fetched {
-                        viewModel.clientsById[clientId] = client
-                        self.clientSheetContext = client
-                    } else {
-                        // Fallback to placeholder if fetch fails
-                        self.clientSheetContext = Client(
-                            id: clientId,
-                            firstName: slot.clientName ?? "Booked",
-                            lastName: "",
-                            emailAddress: "",
-                            phoneNumber: "",
-                            photoURL: nil
-                        )
+                    let client = fetched ?? Client(
+                        id: clientId,
+                        firstName: slot.clientName ?? "Booked",
+                        lastName: "",
+                        emailAddress: "",
+                        phoneNumber: "",
+                        photoURL: nil
+                    )
+                    
+                    if let fetched = fetched {
+                        viewModel.clientsById[clientId] = fetched
                     }
+                    
+                    let booking = ClientBooking(
+                        id: slot.id,
+                        trainerId: slot.trainerId,
+                        trainerName: auth.trainerDisplayName ?? "Trainer",
+                        startTime: slot.startTime,
+                        endTime: slot.endTime,
+                        status: "confirmed",
+                        bookedAt: slot.bookedAt,
+                        isClassBooking: slot.isClassBooking,
+                        classId: slot.classId
+                    )
+                    
+                    self.clientCardContext = ClientCardContext(client: client, booking: booking)
+                }
                 }
             }
         } else {

@@ -16,6 +16,7 @@ struct ClassParticipantsView: View {
     
     @StateObject private var participantsLoader: ParticipantsLoader
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedParticipant: ClassParticipant?
     
     init(classId: String, classTitle: String, preloadedParticipants: [ClassParticipant]? = nil) {
         self.classId = classId
@@ -47,6 +48,10 @@ struct ClassParticipantsView: View {
                         Section("Participants") {
                             ForEach(participantsLoader.participants) { participant in
                                 ParticipantRow(participant: participant)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        selectedParticipant = participant
+                                    }
                             }
                         }
                     }
@@ -59,6 +64,38 @@ struct ClassParticipantsView: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .sheet(item: $selectedParticipant) { participant in
+                ParticipantClientCardSheet(participantUserId: participant.userId)
+            }
+        }
+    }
+}
+
+// Helper view to fetch client and show card
+private struct ParticipantClientCardSheet: View {
+    let participantUserId: String
+    @State private var client: Client?
+    @State private var isLoading = true
+    
+    var body: some View {
+        Group {
+            if isLoading {
+                ProgressView("Loading...")
+                    .tint(AppTheme.primary)
+            } else if let client = client {
+                ClientCardView(client: client, selectedBooking: nil)
+            } else {
+                Text("Unable to load client information")
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+        }
+        .task {
+            do {
+                client = try await FirestoreService.shared.fetchClient(by: participantUserId)
+            } catch {
+                print("Error fetching client: \(error)")
+            }
+            isLoading = false
         }
     }
 }

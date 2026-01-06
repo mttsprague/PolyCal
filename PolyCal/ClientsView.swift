@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ClientsView: View {
     @StateObject private var viewModel = ClientsViewModel()
+    @State private var selectedClient: Client?
 
     var body: some View {
         NavigationView {
@@ -48,12 +49,10 @@ struct ClientsView: View {
                     } else {
                         VStack(spacing: Spacing.sm) {
                             ForEach(viewModel.clients) { client in
-                                NavigationLink {
-                                    ClientDetailView(client: client)
-                                } label: {
-                                    ClientRow(client: client)
-                                }
-                                .buttonStyle(.plain)
+                                ClientRow(client: client)
+                                    .onTapGesture {
+                                        selectedClient = client
+                                    }
                             }
                         }
                     }
@@ -65,6 +64,9 @@ struct ClientsView: View {
             .navigationBarHidden(true)
             .task { await viewModel.load() }
             .refreshable { await viewModel.load() }
+            .sheet(item: $selectedClient) { client in
+                ClientCardView(client: client, selectedBooking: nil)
+            }
         }
     }
 

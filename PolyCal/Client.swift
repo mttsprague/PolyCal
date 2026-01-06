@@ -24,6 +24,12 @@ struct Client: Identifiable, Codable, Hashable {
 
     var fullName: String { "\(firstName) \(lastName)" }
     
+    var initials: String {
+        let first = firstName.prefix(1).uppercased()
+        let last = lastName.prefix(1).uppercased()
+        return "\(first)\(last)"
+    }
+    
     var athleteFullName: String? {
         guard let first = athleteFirstName, let last = athleteLastName else { return nil }
         return "\(first) \(last)"

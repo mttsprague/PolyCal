@@ -401,4 +401,134 @@ final class FirestoreService {
         return Client(id: "client_demo", firstName: "Alex", lastName: "Smith", emailAddress: "alex@example.com", phoneNumber: "555-123-4567", photoURL: nil)
         #endif
     }
+    
+    // MARK: - Client Lesson Packages
+    func fetchClientPackages(clientId: String) async throws -> [LessonPackage] {
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        let snapshot = try await db.collection("users")
+            .document(clientId)
+            .collection("lessonPackages")
+            .order(by: "purchaseDate", descending: true)
+            .getDocuments()
+        
+        let packages: [LessonPackage] = snapshot.documents.compactMap { doc in
+            let data = doc.data()
+            guard
+                let packageType = data["packageType"] as? String,
+                let totalLessons = data["totalLessons"] as? Int,
+                let lessonsUsed = data["lessonsUsed"] as? Int,
+                let purchaseDateTs = data["purchaseDate"] as? Timestamp
+            else {
+                return nil
+            }
+            
+            let expirationDate = (data["expirationDate"] as? Timestamp)?.dateValue()
+            let transactionId = data["transactionId"] as? String
+            
+            return LessonPackage(
+                id: doc.documentID,
+                packageType: packageType,
+                totalLessons: totalLessons,
+                lessonsUsed: lessonsUsed,
+                purchaseDate: purchaseDateTs.dateValue(),
+                expirationDate: expirationDate,
+                transactionId: transactionId
+            )
+        }
+        return packages
+        #else
+        return []
+        #endif
+    }
+    
+    // MARK: - Client Bookings
+    func fetchClientBookings(clientId: String, upcoming: Bool) async throws -> [ClientBooking] {
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        let now = Timestamp(date: Date())
+        
+        var query = db.collection("bookings")
+            .whereField("clientUID", isEqualTo: clientId)
+            .whereField("status", in: ["confirmed", "booked"])
+        
+        if upcoming {
+            query = query.whereField("startTime", isGreaterThanOrEqualTo: now)
+                .order(by: "startTime", descending: false)
+        } else {
+            query = query.whereField("startTime", isLessThan: now)
+                .order(by: "startTime", descending: true)
+        }
+        
+        let snapshot = try await query.limit(to: 20).getDocuments()
+        
+        let bookings: [ClientBooking] = snapshot.documents.compactMap { doc in
+            let data = doc.data()
+            guard
+                let trainerId = data["trainerId"] as? String,
+                let startTimeTs = data["startTime"] as? Timestamp,
+                let endTimeTs = data["endTime"] as? Timestamp,
+                let status = data["status"] as? String
+            else {
+                return nil
+            }
+            
+            let trainerName = data["trainerName"] as? String ?? "Unknown"
+            let bookedAt = (data["bookedAt"] as? Timestamp)?.dateValue()
+            let isClassBooking = data["isClassBooking"] as? Bool
+            let classId = data["classId"] as? String
+            
+            return ClientBooking(
+                id: doc.documentID,
+                trainerId: trainerId,
+                trainerName: trainerName,
+                startTime: startTimeTs.dateValue(),
+                endTime: endTimeTs.dateValue(),
+                status: status,
+                bookedAt: bookedAt,
+                isClassBooking: isClassBooking,
+                classId: classId
+            )
+        }
+        return bookings
+        #else
+        return []
+        #endif
+    }
+    
+    // MARK: - Client Documents
+    func fetchClientDocuments(clientId: String) async throws -> [ClientDocument] {
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        let snapshot = try await db.collection("users")
+            .document(clientId)
+            .collection("documents")
+            .order(by: "uploadedAt", descending: true)
+            .getDocuments()
+        
+        let documents: [ClientDocument] = snapshot.documents.compactMap { doc in
+            let data = doc.data()
+            guard
+                let name = data["name"] as? String,
+                let type = data["type"] as? String,
+                let uploadedAtTs = data["uploadedAt"] as? Timestamp
+            else {
+                return nil
+            }
+            
+            let url = data["url"] as? String
+            
+            return ClientDocument(
+                id: doc.documentID,
+                name: name,
+                type: type,
+                uploadedAt: uploadedAtTs.dateValue(),
+                url: url
+            )
+        }
+        return documents
+        #else
+        return []
+        #endif
+    }
 }

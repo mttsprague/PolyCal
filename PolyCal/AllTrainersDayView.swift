@@ -13,8 +13,13 @@ struct AllTrainersDayView: View {
     @ObservedObject var scheduleViewModel: ScheduleViewModel
     @StateObject private var viewModel = AllTrainersDayViewModel()
     
-    // Client detail sheet with identifiable item
-    @State private var clientSheetContext: Client?
+    // Client card sheet context
+    private struct ClientCardContext: Identifiable {
+        let id = UUID()
+        let client: Client
+        let booking: ClientBooking?
+    }
+    @State private var clientCardContext: ClientCardContext?
     
     // Class participants sheet
     @State private var selectedClassId: String?
@@ -143,9 +148,8 @@ struct AllTrainersDayView: View {
                         .font(.headline)
                 }
             }
-            .sheet(item: $clientSheetContext) { client in
-                ClientDetailSheet(client: client)
-                    .presentationDetents([.medium, .large])
+            .sheet(item: $clientCardContext) { context in
+                ClientCardView(client: context.client, selectedBooking: context.booking)
             }
             .sheet(isPresented: $classParticipantsShown) {
                 if let classId = selectedClassId, let className = selectedClassName {
@@ -185,14 +189,31 @@ struct AllTrainersDayView: View {
             return
         }
         
-        // Handle regular client booking
+        // Handle regular client booking - show ClientCardView
         if slot.isBooked, let clientId = slot.clientId {
             // Check cache first
-            if let cached = scheduleViewModel.clientsById[clientId] {
-                self.clientSheetContext = cached
+            if let client = scheduleViewModel.clientsById[clientId] {
+                // Create booking info from slot
+                let trainerName = viewModel.trainerSchedules
+                    .first(where: { $0.trainer.id == slot.trainerId })?
+                    .trainer.name ?? "Trainer"
+                
+                let booking = ClientBooking(
+                    id: slot.id,
+                    trainerId: slot.trainerId,
+                    trainerName: trainerName,
+                    startTime: slot.startTime,
+                    endTime: slot.endTime,
+                    status: "confirmed",
+                    bookedAt: slot.bookedAt,
+                    isClassBooking: slot.isClassBooking,
+                    classId: slot.classId
+                )
+                
+                self.clientCardContext = ClientCardContext(client: client, booking: booking)
             } else {
                 // Show placeholder if not cached
-                self.clientSheetContext = Client(
+                let placeholderClient = Client(
                     id: clientId,
                     firstName: slot.clientName ?? "Booked",
                     lastName: "",
@@ -200,6 +221,24 @@ struct AllTrainersDayView: View {
                     phoneNumber: "",
                     photoURL: nil
                 )
+                
+                let trainerName = viewModel.trainerSchedules
+                    .first(where: { $0.trainer.id == slot.trainerId })?
+                    .trainer.name ?? "Trainer"
+                
+                let booking = ClientBooking(
+                    id: slot.id,
+                    trainerId: slot.trainerId,
+                    trainerName: trainerName,
+                    startTime: slot.startTime,
+                    endTime: slot.endTime,
+                    status: "confirmed",
+                    bookedAt: slot.bookedAt,
+                    isClassBooking: slot.isClassBooking,
+                    classId: slot.classId
+                )
+                
+                self.clientCardContext = ClientCardContext(client: placeholderClient, booking: booking)
             }
         }
     }
