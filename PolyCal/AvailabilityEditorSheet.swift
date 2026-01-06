@@ -36,8 +36,15 @@ struct AvailabilityEditorSheet: View {
     @State private var recurringStartHour: Int
     @State private var recurringEndHour: Int
     
+    // Main tab selection
+    @State private var mainTab: MainTab = .editAvailability
+    
+    enum MainTab {
+        case editAvailability
+        case bookLesson
+    }
+    
     // Admin booking state
-    @State private var showBookingSection: Bool = false
     @State private var allClients: [Client] = []
     @State private var selectedClientId: String?
     @State private var clientPackages: [LessonPackage] = []
@@ -78,37 +85,39 @@ struct AvailabilityEditorSheet: View {
 
     var body: some View {
         NavigationView {
-            Form {
-                // Top choice: Availability vs Unavailability (status for single slot)
-                Picker("Status", selection: $singleStatus) {
-                    Text("Availability").tag(TrainerScheduleSlot.Status.open)
-                    Text("Unavailability").tag(TrainerScheduleSlot.Status.unavailable)
-                }
-                .pickerStyle(.segmented)
-
-                // Single-slot editor
-                singleSection
-
-                // Recurring editor (toggle on/off, then show details)
-                recurringSection
-                
-                // Admin booking section
+            VStack(spacing: 0) {
+                // Main tab selector (only shown for admin)
                 if isAdmin {
-                    adminBookingSection
+                    Picker("Mode", selection: $mainTab) {
+                        Text("Edit Availability").tag(MainTab.editAvailability)
+                        Text("Book a Lesson").tag(MainTab.bookLesson)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+                }
+                
+                // Content based on selected main tab
+                if mainTab == .editAvailability {
+                    editAvailabilityContent
+                } else {
+                    bookLessonContent
                 }
             }
-            .navigationTitle("Edit Availability")
+            .navigationTitle(mainTab == .editAvailability ? "Edit Availability" : "Book a Lesson")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { saveSingle() }
-                        .disabled(singleSaveDisabled)
+                if mainTab == .editAvailability {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") { saveSingle() }
+                            .disabled(singleSaveDisabled)
+                    }
                 }
             }
-            // Ensure initial values obey the rules on first appearance
             .onAppear {
                 snapAndSyncTimes()
                 if isAdmin {
@@ -117,6 +126,141 @@ struct AvailabilityEditorSheet: View {
             }
         }
         .navigationViewStyle(.stack)
+    }
+    
+    // MARK: - Edit Availability Content
+    
+    private var editAvailabilityContent: some View {
+        Form {
+            // Top choice: Availability vs Unavailability (status for single slot)
+            Picker("Status", selection: $singleStatus) {
+                Text("Availability").tag(TrainerScheduleSlot.Status.open)
+                Text("Unavailability").tag(TrainerScheduleSlot.Status.unavailable)
+            }
+            .pickerStyle(.segmented)
+
+            // Single-slot editor
+            singleSection
+
+            // Recurring editor (toggle on/off, then show details)
+            recurringSection
+        }
+    }
+    
+    // MARK: - Book Lesson Content
+    
+    private var bookLessonContent: some View {
+        Form {
+            Section {
+                // Client selector
+                if isLoadingClients {
+                    HStack {
+                        ProgressView()
+                        Text("Loading clients...")
+                            .foregroundStyle(.secondary)
+                    }
+                } else if allClients.isEmpty {
+                    Text("No clients found")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("Client", selection: $selectedClientId) {
+                        Text("Select a client...").tag(nil as String?)
+                        ForEach(allClients) { client in
+                            Text(client.fullName).tag(Optional(client.id))
+                        }
+                    }
+                    .onChange(of: selectedClientId) { _, newValue in
+                        if let clientId = newValue {
+                            loadPackagesForClient(clientId)
+                        } else {
+                            clientPackages = []
+                            selectedPackageId = nil
+                        }
+                    }
+                }
+            } header: {
+                Text("Select Client")
+            }
+            
+            Section {
+                DatePicker("Start Time", selection: $singleStart, displayedComponents: [.date, .hourAndMinute])
+                    .onChange(of: singleStart) { _, _ in
+                        // Ensure end is at least 1 hour after start
+                        let cal = Calendar.current
+                        let minEnd = cal.date(byAdding: .hour, value: 1, to: singleStart) ?? singleStart.addingTimeInterval(3600)
+                        if singleEnd < minEnd {
+                            singleEnd = minEnd
+                        }
+                    }
+                
+                DatePicker("End Time", selection: $singleEnd, displayedComponents: [.date, .hourAndMinute])
+            } header: {
+                Text("Lesson Time")
+            }
+            
+            Section {
+                // Package selector
+                if let clientId = selectedClientId {
+                    if isLoadingPackages {
+                        HStack {
+                            ProgressView()
+                            Text("Loading packages...")
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if clientPackages.isEmpty {
+                        Text("No available passes for this client")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                    } else {
+                        Picker("Pass/Package", selection: $selectedPackageId) {
+                            Text("Select a pass...").tag(nil as String?)
+                            ForEach(availablePackages) { package in
+                                HStack {
+                                    Text(package.packageDisplayName)
+                                    Spacer()
+                                    Text("(\(package.lessonsRemaining) left)")
+                                }
+                                .tag(Optional(package.id))
+                            }
+                        }
+                    }
+                } else {
+                    Text("Please select a client first")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                }
+            } header: {
+                Text("Lesson Package")
+            }
+            
+            Section {
+                Button {
+                    Task {
+                        await bookLesson()
+                    }
+                } label: {
+                    HStack {
+                        Spacer()
+                        if isBooking {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.8)
+                        }
+                        Text(isBooking ? "Booking..." : "Book Lesson")
+                        Spacer()
+                    }
+                }
+                .listRowBackground((canBookLesson && !isBooking) ? Color.accentColor : Color.gray)
+                .foregroundStyle(.white)
+                .disabled(!canBookLesson || isBooking)
+                
+                if let error = bookingError {
+                    Text(error)
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                }
+            }
+        }
     }
 
     private var singleSection: some View {
@@ -222,115 +366,6 @@ struct AvailabilityEditorSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
-        }
-    }
-    
-    // MARK: - Admin Booking Section
-    
-    private var adminBookingSection: some View {
-        Section {
-            Toggle("Book Lesson for Client", isOn: $showBookingSection)
-            
-            if showBookingSection {
-                VStack(alignment: .leading, spacing: 12) {
-                    // Client selector
-                    if isLoadingClients {
-                        HStack {
-                            ProgressView()
-                            Text("Loading clients...")
-                                .foregroundStyle(.secondary)
-                        }
-                    } else if allClients.isEmpty {
-                        Text("No clients found")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Picker("Client", selection: $selectedClientId) {
-                            Text("Select a client...").tag(nil as String?)
-                            ForEach(allClients) { client in
-                                Text(client.fullName).tag(Optional(client.id))
-                            }
-                        }
-                        .onChange(of: selectedClientId) { _, newValue in
-                            if let clientId = newValue {
-                                loadPackagesForClient(clientId)
-                            } else {
-                                clientPackages = []
-                                selectedPackageId = nil
-                            }
-                        }
-                    }
-                    
-                    // Time editor (defaults to selected slot)
-                    DatePicker("Start Time", selection: $singleStart, displayedComponents: [.date, .hourAndMinute])
-                        .onChange(of: singleStart) { _, _ in
-                            // Ensure end is at least 1 hour after start
-                            let cal = Calendar.current
-                            let minEnd = cal.date(byAdding: .hour, value: 1, to: singleStart) ?? singleStart.addingTimeInterval(3600)
-                            if singleEnd < minEnd {
-                                singleEnd = minEnd
-                            }
-                        }
-                    
-                    DatePicker("End Time", selection: $singleEnd, displayedComponents: [.date, .hourAndMinute])
-                    
-                    // Package selector
-                    if let clientId = selectedClientId {
-                        if isLoadingPackages {
-                            HStack {
-                                ProgressView()
-                                Text("Loading packages...")
-                                    .foregroundStyle(.secondary)
-                            }
-                        } else if clientPackages.isEmpty {
-                            Text("No available passes for this client")
-                                .foregroundStyle(.secondary)
-                                .font(.caption)
-                        } else {
-                            Picker("Pass/Package", selection: $selectedPackageId) {
-                                Text("Select a pass...").tag(nil as String?)
-                                ForEach(availablePackages) { package in
-                                    HStack {
-                                        Text(package.packageDisplayName)
-                                        Spacer()
-                                        Text("(\(package.lessonsRemaining) left)")
-                                    }
-                                    .tag(Optional(package.id))
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Book button
-                    Button {
-                        Task {
-                            await bookLesson()
-                        }
-                    } label: {
-                        HStack {
-                            if isBooking {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
-                            }
-                            Text(isBooking ? "Booking..." : "Book Lesson")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background((canBookLesson && !isBooking) ? Color.accentColor : Color.gray)
-                        .foregroundStyle(.white)
-                        .cornerRadius(10)
-                    }
-                    .disabled(!canBookLesson || isBooking)
-                    
-                    if let error = bookingError {
-                        Text(error)
-                            .foregroundStyle(.red)
-                            .font(.caption)
-                    }
-                }
-            }
-        } header: {
-            Text("Admin: Book for Client")
         }
     }
     
