@@ -152,7 +152,8 @@ struct ScheduleView: View {
                                     scrollToCurrentDay(scrollProxy: scrollProxy)
                                 }
                             }
-                        }
+                        } // <-- MISSING CLOSURE ADDED BELOW TO CLOSE HSTACK
+                        } // closes HStack(spacing: 0)
                         .background(Color(UIColor.systemGray6))
                         .onAppear {
                             scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
