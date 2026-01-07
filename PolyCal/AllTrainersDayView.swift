@@ -8,6 +8,64 @@
 import SwiftUI
 import Combine
 
+// MARK: - ViewModel for AllTrainersDay
+@MainActor
+final class AllTrainersDayViewModel: ObservableObject {
+    @Published var trainers: [Trainer] = []
+    @Published var slotsByTrainer: [String: [TrainerScheduleSlot]] = [:]
+    @Published var currentDay: Date = Date()
+
+    private let scheduleRepo = ScheduleRepository()
+
+    func loadInitial(selectedDate: Date) async {
+        do {
+            let list = try await FirestoreService.shared.fetchAllTrainers()
+            // Keep only active trainers
+            let active = list.filter { $0.active }
+            self.trainers = active
+            await reload(for: selectedDate)
+        } catch {
+            self.trainers = []
+            self.slotsByTrainer = [:]
+        }
+    }
+
+    func reload(for day: Date) async {
+        currentDay = day
+
+        let cal = Calendar.current
+        let startOfDay = cal.startOfDay(for: day)
+        let endOfDay = cal.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay.addingTimeInterval(86400)
+
+        var newMap: [String: [TrainerScheduleSlot]] = [:]
+
+        for trainer in trainers {
+            do {
+                let slots = try await scheduleRepo.fetchScheduleSlots(trainerId: trainer.id, from: startOfDay, to: endOfDay)
+                newMap[trainer.id] = slots.sorted { $0.startTime < $1.startTime }
+            } catch {
+                newMap[trainer.id] = []
+            }
+        }
+
+        self.slotsByTrainer = newMap
+    }
+
+    func slotFor(trainerId: String, atHour hour: Int) -> TrainerScheduleSlot? {
+        guard let slots = slotsByTrainer[trainerId] else { return nil }
+        let cal = Calendar.current
+        guard
+            let cellStart = cal.date(bySettingHour: hour, minute: 0, second: 0, of: currentDay),
+            let cellEnd = cal.date(byAdding: .hour, value: 1, to: cellStart)
+        else { return nil }
+
+        // Return any slot that overlaps the hour cell (on-the-hour bookings will match exactly)
+        return slots.first(where: { slot in
+            slot.startTime < cellEnd && slot.endTime > cellStart
+        })
+    }
+}
+
 struct AllTrainersDayView: View {
     @EnvironmentObject private var auth: AuthManager
     @ObservedObject var scheduleViewModel: ScheduleViewModel
@@ -31,9 +89,9 @@ struct AllTrainersDayView: View {
     private let rowHeight: CGFloat = 56
     private let rowVerticalPadding: CGFloat = 1
     private let timeColWidth: CGFloat = 56
-    private let trainerColumnWidth: CGFloat = 160
     private let columnSpacing: CGFloat = 0
     private let gridHeaderVPad: CGFloat = 6
+    private let horizontalPaddingPerCell: CGFloat = 2
     
     // Track if we've done initial scroll to current time
     @State private var hasScrolledToCurrentTime = false
@@ -56,39 +114,44 @@ struct AllTrainersDayView: View {
                 .padding(.bottom, 4)
 
                 let headerRowHeight = 56.0 // trainer avatar+name header height
+                
+                GeometryReader { geometry in
+                    let trainerCount = CGFloat(max(1, viewModel.trainers.count))
+                    let totalHorizontalPadding = horizontalPaddingPerCell * 2 * trainerCount
+                    let availableWidth = geometry.size.width - timeColWidth - totalHorizontalPadding
+                    let calculatedTrainerWidth = max(40, availableWidth / trainerCount)
 
-                ZStack(alignment: .topLeading) {
-                    ScrollViewReader { verticalScrollProxy in
-                        ScrollView(.vertical, showsIndicators: true) {
-                            HStack(spacing: 0) {
-                            // Fixed left time column
-                            VStack(spacing: 0) {
-                                Color.clear
-                                    .frame(height: headerRowHeight + gridHeaderVPad * 2)
+                    ZStack(alignment: .topLeading) {
+                        ScrollViewReader { verticalScrollProxy in
+                            ScrollView(.vertical, showsIndicators: true) {
+                                HStack(spacing: 0) {
+                                // Fixed left time column
+                                VStack(spacing: 0) {
+                                    Color.clear
+                                        .frame(height: headerRowHeight + gridHeaderVPad * 2)
 
-                                ForEach(scheduleViewModel.visibleHours, id: \.self) { hour in
-                                    Text(hourLabel(hour))
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                        .frame(maxWidth: .infinity, alignment: .trailing)
-                                        .padding(.trailing, 6)
-                                        .frame(height: rowHeight)
-                                        .background(Color(UIColor.systemGray6))
-                                        .padding(.vertical, rowVerticalPadding)
-                                        .id("hour-\(hour)")
+                                    ForEach(scheduleViewModel.visibleHours, id: \.self) { hour in
+                                        Text(hourLabel(hour))
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .frame(maxWidth: .infinity, alignment: .trailing)
+                                            .padding(.trailing, 6)
+                                            .frame(height: rowHeight)
+                                            .background(Color(UIColor.systemGray6))
+                                            .padding(.vertical, rowVerticalPadding)
+                                            .id("hour-\(hour)")
+                                    }
                                 }
-                            }
-                            .frame(width: timeColWidth)
-                            .background(Color(UIColor.systemGray6))
+                                .frame(width: timeColWidth)
+                                .background(Color(UIColor.systemGray6))
 
-                            // Right: trainers header + grid, horizontally scrollable
-                            ScrollView(.horizontal, showsIndicators: true) {
+                                // Right: trainers header + grid
                                 VStack(spacing: 0) {
                                     // Trainer headers
                                     HStack(spacing: columnSpacing) {
                                         ForEach(viewModel.trainers) { trainer in
                                             TrainerHeaderCell(trainer: trainer)
-                                                .frame(width: trainerColumnWidth, height: headerRowHeight)
+                                                .frame(width: calculatedTrainerWidth, height: headerRowHeight)
                                         }
                                     }
                                     .padding(.vertical, gridHeaderVPad)
@@ -112,8 +175,8 @@ struct AllTrainersDayView: View {
                                                                 }
                                                         }
                                                     }
-                                                    .frame(width: trainerColumnWidth, height: rowHeight)
-                                                    .padding(.horizontal, 2)
+                                                    .frame(width: calculatedTrainerWidth, height: rowHeight)
+                                                    .padding(.horizontal, horizontalPaddingPerCell)
                                                 }
                                             }
                                             .padding(.vertical, rowVerticalPadding)
@@ -121,16 +184,17 @@ struct AllTrainersDayView: View {
                                     }
                                     .padding(.bottom, 8)
                                 }
-                            }
-                            .background(Color(UIColor.systemGray6))
-                            .onAppear {
-                                scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
-                            }
-                            .onChange(of: hasScrolledToCurrentTime) { _, newValue in
-                                if !newValue {
+                                .background(Color(UIColor.systemGray6))
+                                .onAppear {
                                     scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
                                 }
+                                .onChange(of: hasScrolledToCurrentTime) { _, newValue in
+                                    if !newValue {
+                                        scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
+                                    }
+                                }
                             }
+                        }
                     }
 
                     // Current time bar positioned by vertical offset
@@ -148,6 +212,7 @@ struct AllTrainersDayView: View {
                                 .offset(x: 0, y: (headerRowHeight + gridHeaderVPad * 2) + y)
                                 .accessibilityHidden(true)
                         }
+                    }
                     }
                 }
             }
@@ -526,64 +591,6 @@ private struct ClientDetailSheet: View {
         }
         .padding()
         .presentationDragIndicator(.visible)
-    }
-}
-
-// MARK: - ViewModel for AllTrainersDay
-@MainActor
-final class AllTrainersDayViewModel: ObservableObject {
-    @Published var trainers: [Trainer] = []
-    @Published var slotsByTrainer: [String: [TrainerScheduleSlot]] = [:]
-    @Published var currentDay: Date = Date()
-
-    private let scheduleRepo = ScheduleRepository()
-
-    func loadInitial(selectedDate: Date) async {
-        do {
-            let list = try await FirestoreService.shared.fetchAllTrainers()
-            // Keep only active trainers
-            let active = list.filter { $0.active }
-            self.trainers = active
-            await reload(for: selectedDate)
-        } catch {
-            self.trainers = []
-            self.slotsByTrainer = [:]
-        }
-    }
-
-    func reload(for day: Date) async {
-        currentDay = day
-
-        let cal = Calendar.current
-        let startOfDay = cal.startOfDay(for: day)
-        let endOfDay = cal.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay.addingTimeInterval(86400)
-
-        var newMap: [String: [TrainerScheduleSlot]] = [:]
-
-        for trainer in trainers {
-            do {
-                let slots = try await scheduleRepo.fetchScheduleSlots(trainerId: trainer.id, from: startOfDay, to: endOfDay)
-                newMap[trainer.id] = slots.sorted { $0.startTime < $1.startTime }
-            } catch {
-                newMap[trainer.id] = []
-            }
-        }
-
-        self.slotsByTrainer = newMap
-    }
-
-    func slotFor(trainerId: String, atHour hour: Int) -> TrainerScheduleSlot? {
-        guard let slots = slotsByTrainer[trainerId] else { return nil }
-        let cal = Calendar.current
-        guard
-            let cellStart = cal.date(bySettingHour: hour, minute: 0, second: 0, of: currentDay),
-            let cellEnd = cal.date(byAdding: .hour, value: 1, to: cellStart)
-        else { return nil }
-
-        // Return any slot that overlaps the hour cell (on-the-hour bookings will match exactly)
-        return slots.first(where: { slot in
-            slot.startTime < cellEnd && slot.endTime > cellStart
-        })
     }
 }
 
