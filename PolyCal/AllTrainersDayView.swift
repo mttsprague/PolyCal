@@ -27,9 +27,9 @@ struct AllTrainersDayView: View {
     @State private var preloadedParticipants: [ClassParticipant]?
     @State private var classParticipantsShown: Bool = false
 
-    // Layout constants (mirroring ScheduleView where sensible)
-    private let rowHeight: CGFloat = 32
-    private let rowVerticalPadding: CGFloat = 6
+    // Layout constants (matching ScheduleView)
+    private let rowHeight: CGFloat = 56
+    private let rowVerticalPadding: CGFloat = 1
     private let timeColWidth: CGFloat = 56
     private let trainerColumnWidth: CGFloat = 160
     private let columnSpacing: CGFloat = 0
@@ -103,7 +103,6 @@ struct AllTrainersDayView: View {
 
                                                         if let slot = viewModel.slotFor(trainerId: trainer.id, atHour: hour) {
                                                             EventCell(slot: slot)
-                                                                .padding(8)
                                                                 .contentShape(Rectangle())
                                                                 .onTapGesture {
                                                                     handleSlotTap(slot)
@@ -111,7 +110,7 @@ struct AllTrainersDayView: View {
                                                         }
                                                     }
                                                     .frame(width: trainerColumnWidth, height: rowHeight)
-                                                    .padding(.horizontal, 6)
+                                                    .padding(.horizontal, 2)
                                                 }
                                             }
                                             .padding(.vertical, rowVerticalPadding)
@@ -378,26 +377,23 @@ private struct TrainerAvatar: View {
     }
 }
 
-// Local copy to avoid referencing a private type from another file
+// Local EventCell matching ScheduleView style
 private struct EventCell: View {
     let slot: TrainerScheduleSlot
 
     var body: some View {
-        HStack(spacing: 8) {
-            if slot.isClass {
-                Image(systemName: "figure.volleyball")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(slot.visualColor)
-            } else {
-                Circle()
-                    .fill(slot.visualColor)
-                    .frame(width: 8, height: 8)
-            }
+        VStack(spacing: 2) {
             Text(slot.displayTitle)
-                .font(.caption)
-                .foregroundStyle(.primary)
-            Spacer()
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(slot.visualColor)
+        )
         .padding(8)
         .background(
             RoundedRectangle(cornerRadius: 10)

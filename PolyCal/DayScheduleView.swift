@@ -78,26 +78,28 @@ struct DayScheduleView: View {
                                 .padding(.horizontal, 4)
 
                             if let slot = matching.first {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack(spacing: 4) {
-                                        if slot.isClass {
-                                            Image(systemName: "figure.volleyball")
-                                                .font(.caption.weight(.semibold))
-                                                .foregroundStyle(slot.visualColor)
-                                        } else {
-                                            Circle()
-                                                .fill(slot.visualColor)
-                                                .frame(width: 8, height: 8)
-                                        }
+                                HStack(spacing: 8) {
+                                    VStack(spacing: 2) {
                                         Text(slot.displayTitle)
+                                            .font(.caption2.weight(.medium))
+                                            .foregroundStyle(.white)
+                                            .lineLimit(2)
+                                    }
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(slot.visualColor)
+                                    )
+                                    
+                                    if slot.isBooked, let name = slot.clientName {
+                                        Text(name)
                                             .font(.body)
                                             .foregroundStyle(.primary)
                                     }
-                                    if slot.isBooked, let name = slot.clientName {
-                                        Text(name)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
+                                    
+                                    Spacer()
                                 }
                                 .onTapGesture {
                                     handleSlotTap(slot)
