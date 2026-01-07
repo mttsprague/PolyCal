@@ -350,6 +350,93 @@ final class ScheduleViewModel: ObservableObject {
         }
     }
     
+    // Admin-only: Set custom slot for all trainers
+    func setCustomSlotForAllTrainers(on day: Date, startTime: Date, endTime: Date, status: TrainerScheduleSlot.Status) async {
+        guard status == .unavailable else { return }
+        
+        do {
+            let allTrainers = try await FirestoreService.shared.fetchAllTrainers()
+            
+            for trainer in allTrainers {
+                guard trainer.active else { continue }
+                
+                let calendar = Calendar.current
+                var currentSlotStart = startTime
+                
+                while currentSlotStart < endTime {
+                    guard let nextHour = calendar.date(byAdding: .hour, value: 1, to: currentSlotStart) else { break }
+                    let actualSlotEnd = min(nextHour, endTime)
+                    
+                    do {
+                        try await scheduleRepo.upsertSlot(
+                            trainerId: trainer.id,
+                            startTime: currentSlotStart,
+                            endTime: actualSlotEnd,
+                            status: status
+                        )
+                    } catch {
+                        print("Failed to set slot for trainer \(trainer.id): \(error)")
+                    }
+                    
+                    currentSlotStart = nextHour
+                }
+            }
+            
+            await loadWeek()
+        } catch {
+            print("Failed to fetch trainers or set slots: \(error)")
+        }
+    }
+    
+    // Admin-only: Set recurring availability for all trainers
+    func openAvailabilityForAllTrainers(
+        start: Date?,
+        end: Date?,
+        dailyStartHour: Int? = nil,
+        dailyEndHour: Int? = nil,
+        slotDurationMinutes: Int? = nil,
+        selectedDaysOfWeek: [Int]? = nil,
+        status: TrainerScheduleSlot.Status = .unavailable
+    ) async {
+        guard status == .unavailable else { return }
+        
+        let fmt = DateFormatter()
+        fmt.calendar = Calendar(identifier: .gregorian)
+        fmt.timeZone = .current
+        fmt.dateFormat = "yyyy-MM-dd"
+
+        let startStr = start.map { fmt.string(from: $0) }
+        let endStr = end.map { fmt.string(from: $0) }
+        
+        do {
+            let allTrainers = try await FirestoreService.shared.fetchAllTrainers()
+            
+            for trainer in allTrainers {
+                guard trainer.active else { continue }
+                
+                do {
+                    let result = try await FunctionsService.shared.processTrainerAvailability(
+                        trainerId: trainer.id,
+                        startDate: startStr,
+                        endDate: endStr,
+                        dailyStartHour: dailyStartHour,
+                        dailyEndHour: dailyEndHour,
+                        slotDurationMinutes: slotDurationMinutes,
+                        daysOfWeek: selectedDaysOfWeek,
+                        status: status.rawValue
+                    )
+                    print("Applied to \(trainer.displayName): \(result.message) slotsAdded=\(result.slotsAdded ?? 0)")
+                } catch {
+                    print("Failed to process availability for trainer \(trainer.id): \(error)")
+                }
+            }
+            
+            await loadWeek()
+        } catch {
+            print("Failed to fetch trainers or process availability: \(error)")
+        }
+    }
+    
     // Admin function to book a lesson for a client
     func bookLessonForClient(clientId: String, startTime: Date, endTime: Date, packageId: String) async -> Bool {
         print("🎯 START")

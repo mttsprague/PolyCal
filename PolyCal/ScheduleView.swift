@@ -193,23 +193,39 @@ struct ScheduleView: View {
                     defaultHour: ctx.hour,
                     isAdmin: auth.isAdmin,
                     editingTrainerId: viewModel.editingTrainerId,
-                    onSaveSingle: { day, start, end, status in
+                    onSaveSingle: { day, start, end, status, applyToAllTrainers in
                         Task {
-                            await viewModel.setCustomSlot(on: day, startTime: start, endTime: end, status: status)
+                            if applyToAllTrainers {
+                                await viewModel.setCustomSlotForAllTrainers(on: day, startTime: start, endTime: end, status: status)
+                            } else {
+                                await viewModel.setCustomSlot(on: day, startTime: start, endTime: end, status: status)
+                            }
                             editorContext = nil
                         }
                     },
-                    onSaveOngoing: { startDate, endDate, dailyStartHour, dailyEndHour, durationMinutes, daysOfWeek, status in
+                    onSaveOngoing: { startDate, endDate, dailyStartHour, dailyEndHour, durationMinutes, daysOfWeek, status, applyToAllTrainers in
                         Task {
-                            await viewModel.openAvailability(
-                                start: startDate,
-                                end: endDate,
-                                dailyStartHour: dailyStartHour,
-                                dailyEndHour: dailyEndHour,
-                                slotDurationMinutes: durationMinutes,
-                                selectedDaysOfWeek: daysOfWeek,
-                                status: status
-                            )
+                            if applyToAllTrainers {
+                                await viewModel.openAvailabilityForAllTrainers(
+                                    start: startDate,
+                                    end: endDate,
+                                    dailyStartHour: dailyStartHour,
+                                    dailyEndHour: dailyEndHour,
+                                    slotDurationMinutes: durationMinutes,
+                                    selectedDaysOfWeek: daysOfWeek,
+                                    status: status
+                                )
+                            } else {
+                                await viewModel.openAvailability(
+                                    start: startDate,
+                                    end: endDate,
+                                    dailyStartHour: dailyStartHour,
+                                    dailyEndHour: dailyEndHour,
+                                    slotDurationMinutes: durationMinutes,
+                                    selectedDaysOfWeek: daysOfWeek,
+                                    status: status
+                                )
+                            }
                             editorContext = nil
                         }
                     },

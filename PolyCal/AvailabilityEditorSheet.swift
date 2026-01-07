@@ -12,8 +12,8 @@ struct AvailabilityEditorSheet: View {
     let defaultHour: Int
     let isAdmin: Bool
     let editingTrainerId: String?
-    let onSaveSingle: (Date, Date, Date, TrainerScheduleSlot.Status) -> Void
-    let onSaveOngoing: (Date?, Date?, Int?, Int?, Int?, [Int]?, TrainerScheduleSlot.Status) -> Void
+    let onSaveSingle: (Date, Date, Date, TrainerScheduleSlot.Status, Bool) -> Void
+    let onSaveOngoing: (Date?, Date?, Int?, Int?, Int?, [Int]?, TrainerScheduleSlot.Status, Bool) -> Void
     let onBookLesson: (String, TimeInterval, TimeInterval, String) -> Void // clientId, startTime, endTime, packageId
 
     @Environment(\.dismiss) private var dismiss
@@ -35,6 +35,9 @@ struct AvailabilityEditorSheet: View {
     @State private var selectedWeekdays: Set<Int> = []
     @State private var recurringStartHour: Int
     @State private var recurringEndHour: Int
+    
+    // Admin: apply unavailability to all trainers
+    @State private var applyToAllTrainers: Bool = false
     
     // Main tab selection
     @State private var mainTab: MainTab = .editAvailability
@@ -139,6 +142,17 @@ struct AvailabilityEditorSheet: View {
                 Text("Unavailability").tag(TrainerScheduleSlot.Status.unavailable)
             }
             .pickerStyle(.segmented)
+            
+            // Admin: Apply to all trainers (only for unavailability)
+            if isAdmin && singleStatus == .unavailable {
+                Section {
+                    Toggle("Apply to all trainers", isOn: $applyToAllTrainers)
+                } footer: {
+                    Text("When enabled, this unavailability will be applied to all trainers' schedules.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             // Single-slot editor
             singleSection
@@ -527,7 +541,7 @@ struct AvailabilityEditorSheet: View {
         let minEnd = cal.date(byAdding: .hour, value: 1, to: startOnDay) ?? startOnDay.addingTimeInterval(3600)
         var endOnDay = roundDownToHour(anchor(time: singleEnd, toDay: singleDay, calendar: cal), calendar: cal)
         if endOnDay < minEnd { endOnDay = minEnd }
-        onSaveSingle(singleDay, startOnDay, endOnDay, singleStatus)
+        onSaveSingle(singleDay, startOnDay, endOnDay, singleStatus, applyToAllTrainers)
         dismiss()
     }
 
@@ -548,7 +562,7 @@ struct AvailabilityEditorSheet: View {
         
         let daysArray = selectedWeekdays.isEmpty ? nil : Array(selectedWeekdays).sorted()
 
-        onSaveOngoing(startDateToUse, endDateToUse, recurringStartHour, recurringEndHour, 60, daysArray, singleStatus)
+        onSaveOngoing(startDateToUse, endDateToUse, recurringStartHour, recurringEndHour, 60, daysArray, singleStatus, applyToAllTrainers)
         dismiss()
     }
 
