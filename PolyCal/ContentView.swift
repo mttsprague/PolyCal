@@ -96,49 +96,6 @@ struct MoreView: View {
                         }
                         .padding(.horizontal, Spacing.lg)
                         
-                        // Register as Trainer Section
-                        if !auth.isTrainer {
-                            CardView {
-                                VStack(alignment: .leading, spacing: Spacing.md) {
-                                    Text("Become a Trainer")
-                                        .font(.headingSmall)
-                                        .foregroundStyle(AppTheme.textPrimary)
-                                    
-                                    Text("Register to start accepting bookings")
-                                        .font(.bodySmall)
-                                        .foregroundStyle(AppTheme.textSecondary)
-                                    
-                                    VStack(spacing: Spacing.sm) {
-                                        TextField("First name", text: $auth.firstNameInput)
-                                            .textContentType(.givenName)
-                                            .autocapitalization(.words)
-                                            .padding(Spacing.sm)
-                                            .background(Color(UIColor.systemGray6))
-                                            .cornerRadius(CornerRadius.xs)
-                                        
-                                        TextField("Last name", text: $auth.lastNameInput)
-                                            .textContentType(.familyName)
-                                            .autocapitalization(.words)
-                                            .padding(Spacing.sm)
-                                            .background(Color(UIColor.systemGray6))
-                                            .cornerRadius(CornerRadius.xs)
-                                    }
-                                    
-                                    Button {
-                                        Task { await registerAsTrainer() }
-                                    } label: {
-                                        HStack(spacing: Spacing.xs) {
-                                            if isBusy { ProgressView().tint(.white) }
-                                            Text("Register as Trainer")
-                                        }
-                                    }
-                                    .buttonStyle(PrimaryButtonStyle(isCompact: true))
-                                    .disabled(isBusy || (auth.firstNameInput.isEmpty || auth.lastNameInput.isEmpty))
-                                }
-                            }
-                            .padding(.horizontal, Spacing.lg)
-                        }
-                        
                         // Sign Out Button
                         Button {
                             auth.signOut()
@@ -265,23 +222,6 @@ struct MoreView: View {
             await auth.signUp()
         } else {
             await auth.signIn()
-        }
-    }
-
-    private func registerAsTrainer() async {
-        isBusy = true
-        defer { isBusy = false }
-        guard let uid = auth.userId, let email = auth.userEmail else { return }
-        do {
-            try await auth.registerTrainerProfileOnServer(
-                uid: uid,
-                email: email,
-                firstName: auth.firstNameInput,
-                lastName: auth.lastNameInput
-            )
-            await auth.refreshTrainerStatus()
-        } catch {
-            auth.errorMessage = error.localizedDescription
         }
     }
 }
