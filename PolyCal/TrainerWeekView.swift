@@ -397,10 +397,11 @@ struct TrainerWeekView: View {
             .order(by: "registeredAt", descending: false)
             .getDocuments()
         
-        return snapshot.documents.compactMap { doc in
+        return snapshot.documents.compactMap { (doc) -> ClassParticipant? in
             let data = doc.data()
             guard let userId = data["userId"] as? String,
-                  let userName = data["userName"] as? String,
+                  let firstName = data["firstName"] as? String,
+                  let lastName = data["lastName"] as? String,
                   let timestamp = data["registeredAt"] as? Timestamp else {
                 return nil
             }
@@ -408,9 +409,9 @@ struct TrainerWeekView: View {
             return ClassParticipant(
                 id: doc.documentID,
                 userId: userId,
-                userName: userName,
-                registeredAt: timestamp.dateValue(),
-                packageType: data["packageType"] as? String
+                firstName: firstName,
+                lastName: lastName,
+                registeredAt: timestamp.dateValue()
             )
         }
     }

@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Combine
+import FirebaseFirestore
 
 // MARK: - ViewModel for AllTrainersDay
 @MainActor
@@ -355,22 +356,25 @@ struct AllTrainersDayView: View {
             .order(by: "registeredAt", descending: false)
             .getDocuments()
         
-        return snapshot.documents.compactMap { doc in
+        var results: [ClassParticipant] = []
+        for doc in snapshot.documents {
             let data = doc.data()
             guard let userId = data["userId"] as? String,
-                  let userName = data["userName"] as? String,
+                  let firstName = data["firstName"] as? String,
+                  let lastName = data["lastName"] as? String,
                   let timestamp = data["registeredAt"] as? Timestamp else {
-                return nil
+                continue
             }
-            
-            return ClassParticipant(
+            let participant = ClassParticipant(
                 id: doc.documentID,
                 userId: userId,
-                userName: userName,
-                registeredAt: timestamp.dateValue(),
-                packageType: data["packageType"] as? String
+                firstName: firstName,
+                lastName: lastName,
+                registeredAt: timestamp.dateValue()
             )
+            results.append(participant)
         }
+        return results
     }
 
     private func shiftWeek(by delta: Int) {
