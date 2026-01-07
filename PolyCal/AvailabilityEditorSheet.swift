@@ -48,6 +48,7 @@ struct AvailabilityEditorSheet: View {
     @State private var allClients: [Client] = []
     @State private var selectedClientId: String?
     @State private var clientPackages: [LessonPackage] = []
+    @State private var selectedPackageType: String?
     @State private var selectedPackageId: String?
     @State private var isLoadingClients: Bool = false
     @State private var isLoadingPackages: Bool = false
@@ -174,6 +175,7 @@ struct AvailabilityEditorSheet: View {
                             loadPackagesForClient(clientId)
                         } else {
                             clientPackages = []
+                            selectedPackageType = nil
                             selectedPackageId = nil
                         }
                     }
@@ -213,31 +215,39 @@ struct AvailabilityEditorSheet: View {
                             .font(.caption)
                     } else {
                         VStack(alignment: .leading, spacing: 12) {
-                            // Show totals by type
-                            ForEach(["private", "2_athlete", "3_athlete", "class_pass"], id: \.self) { type in
-                                let count = totalPassesForType(type)
-                                if count > 0 {
-                                    HStack {
-                                        Text(packageTypeName(type))
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
-                                        Spacer()
-                                        Text("\(count) available")
-                                            .font(.subheadline)
-                                            .fontWeight(.semibold)
-                                            .foregroundStyle(.primary)
+                            // Package type picker - select by type, not individual package
+                            Picker("Select Pass Type", selection: $selectedPackageType) {
+                                Text("Choose a pass type...").tag(nil as String?)
+                                ForEach(["private", "2_athlete", "3_athlete", "class_pass"], id: \.self) { type in
+                                    let count = totalPassesForType(type)
+                                    if count > 0 {
+                                        Text("\(packageTypeName(type)) (\(count) available)")
+                                            .tag(Optional(type))
                                     }
                                 }
                             }
-                            
-                            Divider()
-                            
-                            // Package picker
-                            Picker("Select Pass", selection: $selectedPackageId) {
-                                Text("Choose a pass...").tag(nil as String?)
-                                ForEach(availablePackages) { package in
-                                    Text("\(package.packageDisplayName) (\(package.lessonsRemaining) left)")
-                                        .tag(Optional(package.id))
+                            .onChange(of: selectedPackageType) { _, newType in
+                                // When type is selected, automatically pick the best available package of that type
+                                // Priority: earliest expiration date (if set), then oldest purchase date
+                                if let type = newType {
+                                    let packagesOfType = packagesByType[type]?.filter { $0.lessonsRemaining > 0 && !$0.isExpired } ?? []
+                                    
+                                    let sortedPackages = packagesOfType.sorted { pkg1, pkg2 in
+                                        // Sort by expiration date first (if both have one, earliest first)
+                                        if let exp1 = pkg1.expirationDate, let exp2 = pkg2.expirationDate {
+                                            return exp1 < exp2
+                                        } else if pkg1.expirationDate != nil {
+                                            return true // pkg1 has expiration, prioritize it
+                                        } else if pkg2.expirationDate != nil {
+                                            return false // pkg2 has expiration, prioritize it
+                                        }
+                                        // If neither has expiration or both don't, use oldest purchase date
+                                        return pkg1.purchaseDate < pkg2.purchaseDate
+                                    }
+                                    
+                                    selectedPackageId = sortedPackages.first?.id
+                                } else {
+                                    selectedPackageId = nil
                                 }
                             }
                         }
