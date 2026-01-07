@@ -183,7 +183,7 @@ struct AllTrainersDayView: View {
         .navigationViewStyle(.stack)
     }
     
-    private func handleSlotTap(_ slot: TrainerScheduleSlot) {
+    func handleSlotTap(_ slot: TrainerScheduleSlot) {
         // Check if this is a class booking
         if slot.isClass, let classId = slot.classId {
             selectedClassId = classId
@@ -272,7 +272,7 @@ struct AllTrainersDayView: View {
     }
     
     private func refreshSchedule() async {
-        await viewModel.loadAllTrainersForDay(scheduleViewModel.selectedDate)
+        await viewModel.reload(for: scheduleViewModel.selectedDate)
     }
     
     private func scrollToCurrentTime(verticalScrollProxy: ScrollViewProxy) {
