@@ -336,38 +336,96 @@ struct ClientCardView: View {
                         
                         VStack(spacing: Spacing.sm) {
                             if let athleteName = client.athleteFullName {
-                                HStack(spacing: Spacing.xs) {
-                                    Image(systemName: "figure.volleyball")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(AppTheme.textSecondary)
-                                    Text(athleteName)
-                                        .font(.bodyMedium)
-                                        .foregroundStyle(AppTheme.textPrimary)
-                                    if let position = client.athletePosition {
-                                        Text("•")
-                                            .foregroundStyle(AppTheme.textTertiary)
-                                        Text(position)
-                                            .font(.bodyMedium)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack(spacing: Spacing.xs) {
+                                        Image(systemName: "figure.volleyball")
+                                            .font(.system(size: 14))
                                             .foregroundStyle(AppTheme.textSecondary)
+                                        Text(athleteName)
+                                            .font(.bodyMedium)
+                                            .foregroundStyle(AppTheme.textPrimary)
+                                        if let position = client.athletePosition {
+                                            Text("•")
+                                                .foregroundStyle(AppTheme.textTertiary)
+                                            Text(position)
+                                                .font(.bodyMedium)
+                                                .foregroundStyle(AppTheme.textSecondary)
+                                        }
+                                    }
+                                    if let birthday = client.athleteBirthday {
+                                        HStack(spacing: Spacing.xs) {
+                                            Image(systemName: "calendar")
+                                                .font(.system(size: 12))
+                                                .foregroundStyle(AppTheme.textTertiary)
+                                            Text(birthday)
+                                                .font(.bodySmall)
+                                                .foregroundStyle(AppTheme.textSecondary)
+                                        }
+                                        .padding(.leading, 20)
                                     }
                                 }
                             }
                             
                             if let athlete2Name = client.athlete2FullName {
                                 Divider()
-                                HStack(spacing: Spacing.xs) {
-                                    Image(systemName: "figure.volleyball")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(AppTheme.textSecondary)
-                                    Text(athlete2Name)
-                                        .font(.bodyMedium)
-                                        .foregroundStyle(AppTheme.textPrimary)
-                                    if let position = client.athlete2Position {
-                                        Text("•")
-                                            .foregroundStyle(AppTheme.textTertiary)
-                                        Text(position)
-                                            .font(.bodyMedium)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack(spacing: Spacing.xs) {
+                                        Image(systemName: "figure.volleyball")
+                                            .font(.system(size: 14))
                                             .foregroundStyle(AppTheme.textSecondary)
+                                        Text(athlete2Name)
+                                            .font(.bodyMedium)
+                                            .foregroundStyle(AppTheme.textPrimary)
+                                        if let position = client.athlete2Position {
+                                            Text("•")
+                                                .foregroundStyle(AppTheme.textTertiary)
+                                            Text(position)
+                                                .font(.bodyMedium)
+                                                .foregroundStyle(AppTheme.textSecondary)
+                                        }
+                                    }
+                                    if let birthday = client.athlete2Birthday {
+                                        HStack(spacing: Spacing.xs) {
+                                            Image(systemName: "calendar")
+                                                .font(.system(size: 12))
+                                                .foregroundStyle(AppTheme.textTertiary)
+                                            Text(birthday)
+                                                .font(.bodySmall)
+                                                .foregroundStyle(AppTheme.textSecondary)
+                                        }
+                                        .padding(.leading, 20)
+                                    }
+                                }
+                            }
+                            
+                            if let athlete3Name = client.athlete3FullName {
+                                Divider()
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack(spacing: Spacing.xs) {
+                                        Image(systemName: "figure.volleyball")
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(AppTheme.textSecondary)
+                                        Text(athlete3Name)
+                                            .font(.bodyMedium)
+                                            .foregroundStyle(AppTheme.textPrimary)
+                                        if let position = client.athlete3Position {
+                                            Text("•")
+                                                .foregroundStyle(AppTheme.textTertiary)
+                                            Text(position)
+                                                .font(.bodyMedium)
+                                                .foregroundStyle(AppTheme.textSecondary)
+                                        }
+                                    }
+                                    if let birthday = client.athlete3Birthday {
+                                        HStack(spacing: Spacing.xs) {
+                                            Image(systemName: "calendar")
+                                                .font(.system(size: 12))
+                                                .foregroundStyle(AppTheme.textTertiary)
+                                            Text(birthday)
+                                                .font(.bodySmall)
+                                                .foregroundStyle(AppTheme.textSecondary)
+                                        }
+                                        .padding(.leading, 20)
                                     }
                                 }
                             }
