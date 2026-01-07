@@ -60,7 +60,7 @@ struct AllTrainersDayView: View {
                 ZStack(alignment: .topLeading) {
                     ScrollViewReader { verticalScrollProxy in
                         ScrollView(.vertical, showsIndicators: true) {
-                        HStack(spacing: 0) {
+                            HStack(spacing: 0) {
                             // Fixed left time column
                             VStack(spacing: 0) {
                                 Color.clear
@@ -122,16 +122,15 @@ struct AllTrainersDayView: View {
                                     .padding(.bottom, 8)
                                 }
                             }
-                        }
-                        .background(Color(UIColor.systemGray6))
-                        .onAppear {
-                            scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
-                        }
-                        .onChange(of: hasScrolledToCurrentTime) { _, newValue in
-                            if !newValue {
+                            .background(Color(UIColor.systemGray6))
+                            .onAppear {
                                 scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
                             }
-                        }
+                            .onChange(of: hasScrolledToCurrentTime) { _, newValue in
+                                if !newValue {
+                                    scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
+                                }
+                            }
                     }
 
                     // Current time bar positioned by vertical offset
