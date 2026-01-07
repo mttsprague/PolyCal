@@ -741,10 +741,14 @@ class ClientCardViewModel: ObservableObject {
         
         // Set displayed lesson - match with fetched booking to get packageType
         if let selectedBooking = selectedBooking {
-            // Try to find the matching booking in upcomingBookings (which has packageType)
-            if let matchingBooking = upcomingBookings.first(where: { $0.id == selectedBooking.id }) {
+            // Try to find the matching booking by startTime and trainerId (slot ID != booking ID)
+            if let matchingBooking = upcomingBookings.first(where: { 
+                $0.startTime == selectedBooking.startTime && $0.trainerId == selectedBooking.trainerId 
+            }) {
                 displayedLesson = matchingBooking
-            } else if let matchingBooking = pastBookings.first(where: { $0.id == selectedBooking.id }) {
+            } else if let matchingBooking = pastBookings.first(where: { 
+                $0.startTime == selectedBooking.startTime && $0.trainerId == selectedBooking.trainerId 
+            }) {
                 displayedLesson = matchingBooking
             } else {
                 // Fallback to selected booking if no match found
