@@ -8,6 +8,14 @@
 import SwiftUI
 import Combine
 
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
+
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
+
 struct AggregatedPackage: Identifiable {
     let id = UUID()
     let packageType: String
@@ -241,8 +249,13 @@ struct ClientCardView: View {
     }
     
     private var accountContent: some View {
-        accountSection
-            .padding(.horizontal, Spacing.lg)
+        VStack(spacing: Spacing.md) {
+            if viewModel.isAdmin {
+                walletSection
+            }
+            accountSection
+        }
+        .padding(.horizontal, Spacing.lg)
     }
     
     private var scheduleContent: some View {
@@ -450,6 +463,60 @@ struct ClientCardView: View {
                             .font(.bodyMedium)
                             .foregroundStyle(AppTheme.textSecondary)
                     }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Wallet Section
+    private var walletSection: some View {
+        CardView {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                HStack {
+                    Text("Wallet")
+                        .font(.headingSmall)
+                        .foregroundStyle(AppTheme.textPrimary)
+                    
+                    Spacer()
+                    
+                    if viewModel.isLoadingPaymentMethod {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    }
+                }
+                
+                if let paymentMethod = viewModel.paymentMethodInfo {
+                    HStack(spacing: Spacing.md) {
+                        Image(systemName: "creditcard.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(AppTheme.primary)
+                        
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text("Card on file")
+                                .font(.labelMedium)
+                                .foregroundStyle(AppTheme.textSecondary)
+                            Text("•••• \(paymentMethod)")
+                                .font(.bodyMedium)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(AppTheme.textPrimary)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(.vertical, Spacing.xs)
+                } else if !viewModel.isLoadingPaymentMethod {
+                    HStack(spacing: Spacing.md) {
+                        Image(systemName: "creditcard")
+                            .font(.system(size: 24))
+                            .foregroundStyle(AppTheme.textTertiary)
+                        
+                        Text("No card saved")
+                            .font(.bodyMedium)
+                            .foregroundStyle(AppTheme.textSecondary)
+                        
+                        Spacer()
+                    }
+                    .padding(.vertical, Spacing.xs)
                 }
             }
         }
@@ -724,12 +791,20 @@ class ClientCardViewModel: ObservableObject {
     @Published var pastBookings: [ClientBooking] = []
     @Published var documents: [ClientDocument] = []
     @Published var displayedLesson: ClientBooking?
+    @Published var paymentMethodInfo: String? = nil
+    @Published var isAdmin = false
     
     @Published var isLoadingPackages = false
     @Published var isLoadingBookings = false
     @Published var isLoadingDocuments = false
+    @Published var isLoadingPaymentMethod = false
     
     func loadClientData(clientId: String, selectedBooking: ClientBooking?) async {
+        // Check admin status
+        #if canImport(FirebaseFirestore)
+        await checkAdminStatus()
+        #endif
+        
         // Load all data in parallel
         async let packagesTask: () = loadPackages(clientId: clientId)
         async let bookingsTask: () = loadBookings(clientId: clientId)
@@ -738,6 +813,11 @@ class ClientCardViewModel: ObservableObject {
         await packagesTask
         await bookingsTask
         await documentsTask
+        
+        // Load payment method if admin
+        if isAdmin {
+            await loadPaymentMethod(clientId: clientId)
+        }
         
         // Set displayed lesson - match with fetched booking to get packageType
         if let selectedBooking = selectedBooking {
@@ -817,5 +897,48 @@ class ClientCardViewModel: ObservableObject {
         } catch {
             print("Error loading documents: \(error)")
         }
+    }
+    
+    private func checkAdminStatus() async {
+        #if canImport(FirebaseAuth) && canImport(FirebaseFirestore)
+        guard let userId = Auth.auth().currentUser?.uid else {
+            isAdmin = false
+            return
+        }
+        
+        do {
+            let trainerDoc = try await Firestore.firestore().collection("trainers").document(userId).getDocument()
+            isAdmin = trainerDoc.data()?["isAdmin"] as? Bool ?? false
+        } catch {
+            print("Error checking admin status: \(error)")
+            isAdmin = false
+        }
+        #else
+        isAdmin = false
+        #endif
+    }
+    
+    private func loadPaymentMethod(clientId: String) async {
+        isLoadingPaymentMethod = true
+        defer { isLoadingPaymentMethod = false }
+        
+        #if canImport(FirebaseFirestore)
+        do {
+            let userDoc = try await Firestore.firestore().collection("users").document(clientId).getDocument()
+            
+            if let stripeCustomerId = userDoc.data()?["stripeCustomerId"] as? String,
+               !stripeCustomerId.isEmpty,
+               let last4 = userDoc.data()?["paymentMethodLast4"] as? String {
+                paymentMethodInfo = last4
+            } else {
+                paymentMethodInfo = nil
+            }
+        } catch {
+            print("Error loading payment method: \(error)")
+            paymentMethodInfo = nil
+        }
+        #else
+        paymentMethodInfo = nil
+        #endif
     }
 }
