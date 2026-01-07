@@ -67,6 +67,8 @@ struct ClientBooking: Identifiable, Codable {
     var bookedAt: Date?
     var isClassBooking: Bool?
     var classId: String?
+    var packageId: String?
+    var packageType: String?
     
     var formattedDate: String {
         let formatter = DateFormatter()
@@ -83,6 +85,17 @@ struct ClientBooking: Identifiable, Codable {
             return "\(minutes)m"
         }
         return "1h"
+    }
+    
+    var packageTypeName: String {
+        guard let type = packageType else { return "Private Lesson" }
+        switch type {
+        case "private", "single": return "Private Lesson"
+        case "2_athlete", "two_athlete": return "2-Athlete Private Lesson"
+        case "3_athlete", "three_athlete": return "3-Athlete Private Lesson"
+        case "class_pass": return "Class Pass"
+        default: return "Private Lesson"
+        }
     }
 }
 

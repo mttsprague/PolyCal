@@ -589,34 +589,65 @@ final class FirestoreService {
         
         let snapshot = try await query.limit(to: 20).getDocuments()
         
-        let bookings: [ClientBooking] = snapshot.documents.compactMap { doc in
-            let data = doc.data()
-            guard
-                let trainerId = data["trainerId"] as? String,
-                let startTimeTs = data["startTime"] as? Timestamp,
-                let endTimeTs = data["endTime"] as? Timestamp,
-                let status = data["status"] as? String
-            else {
-                return nil
+        let bookings: [ClientBooking] = await withTaskGroup(of: ClientBooking?.self) { group in
+            for doc in snapshot.documents {
+                group.addTask {
+                    let data = doc.data()
+                    guard
+                        let trainerId = data["trainerId"] as? String,
+                        let startTimeTs = data["startTime"] as? Timestamp,
+                        let endTimeTs = data["endTime"] as? Timestamp,
+                        let status = data["status"] as? String
+                    else {
+                        return nil
+                    }
+                    
+                    let trainerName = data["trainerName"] as? String ?? "Unknown"
+                    let bookedAt = (data["bookedAt"] as? Timestamp)?.dateValue()
+                    let isClassBooking = data["isClassBooking"] as? Bool
+                    let classId = data["classId"] as? String
+                    let packageId = data["packageId"] as? String ?? data["lessonPackageId"] as? String
+                    
+                    // Fetch package type if packageId exists
+                    var packageType: String? = nil
+                    if let pkgId = packageId {
+                        do {
+                            let packageDoc = try await db.collection("users")
+                                .document(clientId)
+                                .collection("lessonPackages")
+                                .document(pkgId)
+                                .getDocument()
+                            packageType = packageDoc.data()?["packageType"] as? String
+                        } catch {
+                            print("Failed to fetch package type: \(error)")
+                        }
+                    }
+                    
+                    return ClientBooking(
+                        id: doc.documentID,
+                        trainerId: trainerId,
+                        trainerName: trainerName,
+                        startTime: startTimeTs.dateValue(),
+                        endTime: endTimeTs.dateValue(),
+                        status: status,
+                        bookedAt: bookedAt,
+                        isClassBooking: isClassBooking,
+                        classId: classId,
+                        packageId: packageId,
+                        packageType: packageType
+                    )
+                }
             }
             
-            let trainerName = data["trainerName"] as? String ?? "Unknown"
-            let bookedAt = (data["bookedAt"] as? Timestamp)?.dateValue()
-            let isClassBooking = data["isClassBooking"] as? Bool
-            let classId = data["classId"] as? String
-            
-            return ClientBooking(
-                id: doc.documentID,
-                trainerId: trainerId,
-                trainerName: trainerName,
-                startTime: startTimeTs.dateValue(),
-                endTime: endTimeTs.dateValue(),
-                status: status,
-                bookedAt: bookedAt,
-                isClassBooking: isClassBooking,
-                classId: classId
-            )
+            var results: [ClientBooking] = []
+            for await booking in group {
+                if let booking = booking {
+                    results.append(booking)
+                }
+            }
+            return results
         }
+        
         return bookings
         #else
         return []

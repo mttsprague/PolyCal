@@ -306,6 +306,17 @@ struct ClientCardView: View {
                                     .font(.bodyMedium)
                                     .foregroundStyle(AppTheme.textPrimary)
                             }
+                            
+                            if nextBooking.isClassBooking != true {
+                                HStack(spacing: Spacing.xs) {
+                                    Image(systemName: "ticket.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(AppTheme.textSecondary)
+                                    Text(nextBooking.packageTypeName)
+                                        .font(.bodyMedium)
+                                        .foregroundStyle(AppTheme.textPrimary)
+                                }
+                            }
                         }
                     }
                 }
