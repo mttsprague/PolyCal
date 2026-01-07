@@ -315,6 +315,9 @@ struct ClientCardView: View {
                                     Text(nextBooking.packageTypeName)
                                         .font(.bodyMedium)
                                         .foregroundStyle(AppTheme.textPrimary)
+                                        .onAppear {
+                                            print("🎫 Displaying packageTypeName: \(nextBooking.packageTypeName) from packageType: \(nextBooking.packageType ?? "nil")")
+                                        }
                                 }
                             }
                         }

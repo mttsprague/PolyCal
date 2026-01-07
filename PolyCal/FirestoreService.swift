@@ -618,8 +618,9 @@ final class FirestoreService {
                                 .document(pkgId)
                                 .getDocument()
                             packageType = packageDoc.data()?["packageType"] as? String
+                            print("📦 Fetched packageType: \(packageType ?? "nil") for packageId: \(pkgId)")
                         } catch {
-                            print("Failed to fetch package type: \(error)")
+                            print("❌ Failed to fetch package type: \(error)")
                         }
                     }
                     
