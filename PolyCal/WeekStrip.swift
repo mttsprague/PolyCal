@@ -51,10 +51,10 @@ struct WeekStrip: View {
 
             // Evenly spaced 7-day row aligned with schedule grid
             GeometryReader { geometry in
-                let horizontalPaddingPerCell: CGFloat = 6
-                let totalHorizontalPadding = horizontalPaddingPerCell * 2 * 7 // 6px on each side of 7 cells
+                let horizontalPaddingPerCell: CGFloat = 2
+                let totalHorizontalPadding = horizontalPaddingPerCell * 2 * 7 // 2px on each side of 7 cells
                 let availableWidth = geometry.size.width - timeColWidth - totalHorizontalPadding
-                let calculatedDayWidth = availableWidth / 7
+                let calculatedDayWidth = max(10, availableWidth / 7) // Ensure minimum width
                 
                 HStack(spacing: 0) {
                     // Time column spacer to align with schedule

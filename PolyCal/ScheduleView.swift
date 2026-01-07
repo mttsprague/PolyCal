@@ -76,10 +76,10 @@ struct ScheduleView: View {
                 .padding(.bottom, 4)
 
                 GeometryReader { geometry in
-                    let horizontalPaddingPerCell: CGFloat = 6
-                    let totalHorizontalPadding = horizontalPaddingPerCell * 2 * 7 // 6px on each side of 7 cells
+                    let horizontalPaddingPerCell: CGFloat = 2
+                    let totalHorizontalPadding = horizontalPaddingPerCell * 2 * 7 // 2px on each side of 7 cells
                     let availableWidth = geometry.size.width - timeColWidth - totalHorizontalPadding
-                    let calculatedDayWidth = availableWidth / 7
+                    let calculatedDayWidth = max(10, availableWidth / 7) // Ensure minimum width to prevent negative values
                     
                     ZStack(alignment: .topLeading) {
                         ScrollViewReader { verticalScrollProxy in
@@ -111,7 +111,7 @@ struct ScheduleView: View {
                                                         slotsForDay: viewModel.slotsByDay[DateOnly(day)] ?? [],
                                                         dayColumnWidth: calculatedDayWidth,
                                                         rowHeight: rowHeight,
-                                                        horizontalPadding: 6,
+                                                        horizontalPadding: 2,
                                                         onEmptyTap: {
                                                             editorContext = EditorContext(day: day, hour: hour)
                                                         },
