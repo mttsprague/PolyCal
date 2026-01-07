@@ -15,6 +15,9 @@ struct WeekStrip: View {
     // Optional week navigation actions
     var onPrevWeek: (() -> Void)? = nil
     var onNextWeek: (() -> Void)? = nil
+    
+    // Layout constants to match ScheduleView
+    private let timeColWidth: CGFloat = 56
 
     var body: some View {
         VStack(spacing: 10) {
@@ -46,23 +49,34 @@ struct WeekStrip: View {
             }
             .padding(.horizontal)
 
-            // Evenly spaced 7-day row (no scroll)
-            HStack(spacing: 4) {
-                ForEach(weekDays, id: \.self) { day in
-                    DayPill(
-                        date: day,
-                        isSelected: Calendar.current.isDate(day, inSameDayAs: selectedDate)
-                    )
-                    .frame(maxWidth: .infinity) // evenly distribute
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.easeInOut) {
-                            selectedDate = day
+            // Evenly spaced 7-day row aligned with schedule grid
+            GeometryReader { geometry in
+                let availableWidth = geometry.size.width - timeColWidth
+                let calculatedDayWidth = availableWidth / 7
+                
+                HStack(spacing: 0) {
+                    // Time column spacer to align with schedule
+                    Color.clear
+                        .frame(width: timeColWidth)
+                    
+                    HStack(spacing: 0) {
+                        ForEach(weekDays, id: \.self) { day in
+                            DayPill(
+                                date: day,
+                                isSelected: Calendar.current.isDate(day, inSameDayAs: selectedDate)
+                            )
+                            .frame(width: calculatedDayWidth)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.easeInOut) {
+                                    selectedDate = day
+                                }
+                            }
                         }
                     }
                 }
             }
-            .padding(.horizontal)
+            .frame(height: 60)
         }
     }
 }
