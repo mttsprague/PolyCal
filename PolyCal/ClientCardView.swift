@@ -8,6 +8,37 @@
 import SwiftUI
 import Combine
 
+struct AggregatedPackage: Identifiable {
+    let id = UUID()
+    let packageType: String
+    let totalRemaining: Int
+    let totalLessons: Int
+    let totalUsed: Int
+    let hasExpired: Bool
+    
+    var packageDisplayName: String {
+        switch packageType {
+        case "single": return "Single Lesson"
+        case "five_pack": return "5-Pack"
+        case "ten_pack": return "10-Pack"
+        case "two_athlete": return "2 Athletes"
+        case "three_athlete": return "3 Athletes"
+        case "class_pass": return "Class Pass"
+        default: return packageType.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+    
+    var statusText: String {
+        if totalRemaining == 0 {
+            return "All used"
+        } else if hasExpired {
+            return "\(totalRemaining) remaining (some expired)"
+        } else {
+            return "\(totalRemaining) of \(totalLessons) remaining"
+        }
+    }
+}
+
 enum ClientCardTab: String, CaseIterable, Identifiable {
     case profile = "Profile"
     case account = "Account"
@@ -373,7 +404,7 @@ struct ClientCardView: View {
                     }
                 }
                 
-                if viewModel.packages.isEmpty && !viewModel.isLoadingPackages {
+                if viewModel.aggregatedPackages.isEmpty && !viewModel.isLoadingPackages {
                     VStack(spacing: Spacing.sm) {
                         Image(systemName: "creditcard")
                             .font(.system(size: 32))
@@ -386,9 +417,9 @@ struct ClientCardView: View {
                     .padding(.vertical, Spacing.lg)
                 } else {
                     VStack(spacing: Spacing.sm) {
-                        ForEach(viewModel.packages) { package in
-                            packageRow(package)
-                            if package.id != viewModel.packages.last?.id {
+                        ForEach(viewModel.aggregatedPackages) { package in
+                            aggregatedPackageRow(package)
+                            if package.id != viewModel.aggregatedPackages.last?.id {
                                 Divider()
                             }
                         }
@@ -398,7 +429,7 @@ struct ClientCardView: View {
         }
     }
     
-    private func packageRow(_ package: LessonPackage) -> some View {
+    private func aggregatedPackageRow(_ package: AggregatedPackage) -> some View {
         HStack(spacing: Spacing.md) {
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(package.packageDisplayName)
@@ -408,14 +439,14 @@ struct ClientCardView: View {
                 
                 Text(package.statusText)
                     .font(.labelSmall)
-                    .foregroundStyle(packageStatusColor(package))
+                    .foregroundStyle(aggregatedPackageStatusColor(package))
             }
             
             Spacer()
             
-            if package.lessonsRemaining > 0 && !package.isExpired {
+            if package.totalRemaining > 0 {
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(package.lessonsRemaining)")
+                    Text("\(package.totalRemaining)")
                         .font(.system(size: 24, weight: .bold))
                         .foregroundStyle(AppTheme.primary)
                     Text("left")
@@ -423,7 +454,7 @@ struct ClientCardView: View {
                         .foregroundStyle(AppTheme.textSecondary)
                 }
             } else {
-                Image(systemName: package.isExpired ? "clock.badge.xmark" : "checkmark.circle.fill")
+                Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 24))
                     .foregroundStyle(AppTheme.textTertiary)
             }
@@ -431,10 +462,10 @@ struct ClientCardView: View {
         .padding(.vertical, Spacing.xs)
     }
     
-    private func packageStatusColor(_ package: LessonPackage) -> Color {
-        if package.isExpired || package.lessonsRemaining == 0 {
+    private func aggregatedPackageStatusColor(_ package: AggregatedPackage) -> Color {
+        if package.totalRemaining == 0 {
             return AppTheme.textTertiary
-        } else if package.lessonsRemaining <= 1 {
+        } else if package.totalRemaining <= 1 {
             return Color.orange
         } else {
             return AppTheme.success
@@ -620,6 +651,7 @@ struct ClientCardView: View {
 @MainActor
 class ClientCardViewModel: ObservableObject {
     @Published var packages: [LessonPackage] = []
+    @Published var aggregatedPackages: [AggregatedPackage] = []
     @Published var upcomingBookings: [ClientBooking] = []
     @Published var pastBookings: [ClientBooking] = []
     @Published var documents: [ClientDocument] = []
@@ -653,9 +685,32 @@ class ClientCardViewModel: ObservableObject {
         
         do {
             packages = try await FirestoreService.shared.fetchClientPackages(clientId: clientId)
+            aggregatePackages()
         } catch {
             print("Error loading packages: \(error)")
         }
+    }
+    
+    private func aggregatePackages() {
+        // Group packages by type
+        let grouped = Dictionary(grouping: packages) { $0.packageType }
+        
+        // Create aggregated packages
+        aggregatedPackages = grouped.map { (packageType, packagesOfType) in
+            let totalRemaining = packagesOfType.reduce(0) { $0 + $1.lessonsRemaining }
+            let hasExpired = packagesOfType.contains { $0.isExpired && $0.lessonsRemaining > 0 }
+            let totalLessons = packagesOfType.reduce(0) { $0 + $1.totalLessons }
+            let totalUsed = packagesOfType.reduce(0) { $0 + $1.lessonsUsed }
+            
+            return AggregatedPackage(
+                packageType: packageType,
+                totalRemaining: totalRemaining,
+                totalLessons: totalLessons,
+                totalUsed: totalUsed,
+                hasExpired: hasExpired
+            )
+        }
+        .sorted { $0.packageDisplayName < $1.packageDisplayName }
     }
     
     private func loadBookings(clientId: String) async {
