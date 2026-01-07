@@ -36,6 +36,9 @@ struct TrainerWeekView: View {
     private let timeColWidth: CGFloat = 56
     private let columnSpacing: CGFloat = 0
     
+    // Track if we've done initial scroll to current time
+    @State private var hasScrolledToCurrentTime = false
+    
     var body: some View {
         VStack(spacing: 0) {
             // Header with trainer info
@@ -82,6 +85,7 @@ struct TrainerWeekView: View {
                                 // Days grid
                                 HStack(spacing: columnSpacing) {
                                     ForEach(viewModel.weekDays, id: \.self) { day in
+                                        let isToday = Calendar.current.isDateInToday(day)
                                         VStack(spacing: 0) {
                                             ForEach(viewModel.visibleHours, id: \.self) { hour in
                                                 HourDayCell(
@@ -91,6 +95,7 @@ struct TrainerWeekView: View {
                                                     dayColumnWidth: calculatedDayWidth,
                                                     rowHeight: rowHeight,
                                                     horizontalPadding: 2,
+                                                    isToday: isToday,
                                                     onEmptyTap: {},
                                                     onSlotTap: { slot in
                                                         handleSlotTap(slot, defaultDay: day, defaultHour: hour)
@@ -101,12 +106,21 @@ struct TrainerWeekView: View {
                                                 .padding(.vertical, rowVerticalPadding)
                                             }
                                         }
+                                        .background(isToday ? Color.blue.opacity(0.08) : Color.clear)
                                     }
                                 }
                                 .padding(.bottom, 8)
                             }
                         }
                         .background(Color(UIColor.systemGray6))
+                        .onAppear {
+                            scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
+                        }
+                        .onChange(of: hasScrolledToCurrentTime) { _, newValue in
+                            if !newValue {
+                                scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
+                            }
+                        }
                     }
                     
                     // Current time indicator
@@ -149,9 +163,13 @@ struct TrainerWeekView: View {
             await trainerViewModel.loadTrainer(trainerId: trainerId)
             await trainerViewModel.loadWeek(weekDays: viewModel.weekDays, trainerId: trainerId)
         }
-        .onChange(of: viewModel.selectedDate) { _, _ in
+        .onChange(of: viewModel.selectedDate) { oldValue, newValue in
             Task {
                 await trainerViewModel.loadWeek(weekDays: viewModel.weekDays, trainerId: trainerId)
+            }
+            // Reset scroll flag when week changes
+            if !Calendar.current.isDate(oldValue, equalTo: newValue, toGranularity: .weekOfYear) {
+                hasScrolledToCurrentTime = false
             }
         }
     }
@@ -176,6 +194,30 @@ struct TrainerWeekView: View {
             }
             
             Spacer()
+            
+            // Jump to current week button
+            Button {
+                jumpToCurrentWeek()
+            } label: {
+                Image(systemName: "calendar.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(AppTheme.primary)
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .buttonStyle(.plain)
+            
+            // Refresh button
+            Button {
+                Task {
+                    await refreshSchedule()
+                }
+            } label: {
+                Image(systemName: "arrow.clockwise.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(AppTheme.primary)
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
@@ -210,6 +252,33 @@ struct TrainerWeekView: View {
     private func shiftWeek(by weeks: Int) {
         guard let newDate = Calendar.current.date(byAdding: .day, value: weeks * 7, to: viewModel.selectedDate) else { return }
         viewModel.selectedDate = newDate
+    }
+    
+    private func jumpToCurrentWeek() {
+        withAnimation(.easeInOut) {
+            viewModel.selectedDate = Date()
+            hasScrolledToCurrentTime = false
+        }
+    }
+    
+    private func refreshSchedule() async {
+        await trainerViewModel.loadWeek(weekDays: viewModel.weekDays, trainerId: trainerId)
+    }
+    
+    private func scrollToCurrentTime(verticalScrollProxy: ScrollViewProxy) {
+        guard !hasScrolledToCurrentTime else { return }
+        
+        let now = Date()
+        let comps = Calendar.current.dateComponents([.hour], from: now)
+        guard let currentHour = comps.hour else { return }
+        
+        // Scroll to the current hour, centered
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            withAnimation(.easeInOut(duration: 0.5)) {
+                verticalScrollProxy.scrollTo("hour-\(currentHour)", anchor: .center)
+            }
+            hasScrolledToCurrentTime = true
+        }
     }
     
     private func hourLabel(_ hour: Int) -> String {
@@ -303,6 +372,7 @@ private struct HourDayCell: View {
     let dayColumnWidth: CGFloat
     let rowHeight: CGFloat
     let horizontalPadding: CGFloat
+    let isToday: Bool
     let onEmptyTap: () -> Void
     let onSlotTap: (TrainerScheduleSlot) -> Void
     let onSetStatus: (TrainerScheduleSlot.Status) -> Void
@@ -321,7 +391,7 @@ private struct HourDayCell: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(UIColor.systemGray5))
+                .fill(isToday ? Color(UIColor.systemGray4) : Color(UIColor.systemGray5))
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color(UIColor.systemGray3), lineWidth: 0.5)
 

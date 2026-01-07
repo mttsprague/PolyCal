@@ -34,6 +34,9 @@ struct AllTrainersDayView: View {
     private let trainerColumnWidth: CGFloat = 160
     private let columnSpacing: CGFloat = 0
     private let gridHeaderVPad: CGFloat = 6
+    
+    // Track if we've done initial scroll to current time
+    @State private var hasScrolledToCurrentTime = false
 
     var body: some View {
         NavigationView {
@@ -55,7 +58,8 @@ struct AllTrainersDayView: View {
                 let headerRowHeight = 56.0 // trainer avatar+name header height
 
                 ZStack(alignment: .topLeading) {
-                    ScrollView(.vertical, showsIndicators: true) {
+                    ScrollViewReader { verticalScrollProxy in
+                        ScrollView(.vertical, showsIndicators: true) {
                         HStack(spacing: 0) {
                             // Fixed left time column
                             VStack(spacing: 0) {
@@ -71,6 +75,7 @@ struct AllTrainersDayView: View {
                                         .frame(height: rowHeight)
                                         .background(Color(UIColor.systemGray6))
                                         .padding(.vertical, rowVerticalPadding)
+                                        .id("hour-\(hour)")
                                 }
                             }
                             .frame(width: timeColWidth)
@@ -119,6 +124,14 @@ struct AllTrainersDayView: View {
                             }
                         }
                         .background(Color(UIColor.systemGray6))
+                        .onAppear {
+                            scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
+                        }
+                        .onChange(of: hasScrolledToCurrentTime) { _, newValue in
+                            if !newValue {
+                                scrollToCurrentTime(verticalScrollProxy: verticalScrollProxy)
+                            }
+                        }
                     }
 
                     // Current time bar positioned by vertical offset
@@ -250,6 +263,33 @@ struct AllTrainersDayView: View {
             }
         }
     }
+    
+    private func jumpToCurrentWeek() {
+        withAnimation(.easeInOut) {
+            scheduleViewModel.selectedDate = Date()
+            hasScrolledToCurrentTime = false
+        }
+    }
+    
+    private func refreshSchedule() async {
+        await viewModel.loadAllTrainersForDay(scheduleViewModel.selectedDate)
+    }
+    
+    private func scrollToCurrentTime(verticalScrollProxy: ScrollViewProxy) {
+        guard !hasScrolledToCurrentTime else { return }
+        
+        let now = Date()
+        let comps = Calendar.current.dateComponents([.hour], from: now)
+        guard let currentHour = comps.hour else { return }
+        
+        // Scroll to the current hour, centered
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            withAnimation(.easeInOut(duration: 0.5)) {
+                verticalScrollProxy.scrollTo("hour-\(currentHour)", anchor: .center)
+            }
+            hasScrolledToCurrentTime = true
+        }
+    }
 
     private var header: some View {
         HStack(spacing: 12) {
@@ -270,6 +310,30 @@ struct AllTrainersDayView: View {
             }
 
             Spacer()
+            
+            // Jump to current week button
+            Button {
+                jumpToCurrentWeek()
+            } label: {
+                Image(systemName: "calendar.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(AppTheme.primary)
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .buttonStyle(.plain)
+            
+            // Refresh button
+            Button {
+                Task {
+                    await refreshSchedule()
+                }
+            } label: {
+                Image(systemName: "arrow.clockwise.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(AppTheme.primary)
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
