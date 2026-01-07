@@ -271,6 +271,33 @@ final class FirestoreService {
         ]
         #endif
     }
+    
+    func fetchTrainer(by id: String) async throws -> Trainer? {
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        let doc = try await db.collection("trainers").document(id).getDocument()
+        guard let data = doc.data() else { return nil }
+        
+        let name = (data["name"] as? String) ?? "Unknown"
+        let email = (data["email"] as? String) ?? ""
+        let avatarUrl = data["avatarUrl"] as? String
+        let photoURL = data["photoURL"] as? String
+        let imageUrl = data["imageUrl"] as? String
+        let active = (data["active"] as? Bool) ?? true
+        
+        return Trainer(
+            id: doc.documentID,
+            displayName: name,
+            email: email,
+            avatarUrl: avatarUrl,
+            photoURL: photoURL,
+            imageUrl: imageUrl,
+            active: active
+        )
+        #else
+        return Trainer(id: "trainer_demo", displayName: "Demo Trainer", email: "demo@example.com", avatarUrl: nil, photoURL: nil, imageUrl: nil, active: true)
+        #endif
+    }
 
     // MARK: - Users (profiles) compliant with rules
     func createOrUpdateUserProfile(uid: String, firstName: String, lastName: String, emailAddress: String, phoneNumber: String? = nil, photoURL: String? = nil, active: Bool = true) async throws {

@@ -35,6 +35,7 @@ struct ScheduleView: View {
     // Navigation to other schedule modes
     @State private var navigateToMyDay = false
     @State private var navigateToAllTrainersDay = false
+    @State private var selectedTrainerForNav: String?
 
     // Client card sheet context
     private struct ClientCardContext: Identifiable {
@@ -243,6 +244,7 @@ struct ScheduleView: View {
                     },
                     onSelectTrainer: { id in
                         viewModel.setMode(.trainerDay(id))
+                        selectedTrainerForNav = id
                     }
                 )
                 .environmentObject(auth)
@@ -254,6 +256,10 @@ struct ScheduleView: View {
             }
             .navigationDestination(isPresented: $navigateToAllTrainersDay) {
                 AllTrainersDayView(scheduleViewModel: viewModel)
+                    .environmentObject(auth)
+            }
+            .navigationDestination(item: $selectedTrainerForNav) { trainerId in
+                TrainerWeekView(trainerId: trainerId, viewModel: viewModel)
                     .environmentObject(auth)
             }
             .sheet(item: $clientCardContext) { context in
