@@ -60,6 +60,7 @@ interface ProcessTrainerAvailabilityData {
   slotDurationMinutes?: number; // usually 60
   daysOfWeek?: number[]; // 0=Sunday ... 6=Saturday (LOCAL weekday)
   timezoneOffsetMinutes?: number; // Date.getTimezoneOffset() from client (positive west of UTC)
+  status?: string; // "open" or "unavailable"
 }
 
 // --- Cloud Functions ---
@@ -625,6 +626,7 @@ export const processTrainerAvailability = functions.https.onCall(
       slotDurationMinutes = 60,
       daysOfWeek, // optional filter 0..6 (Sun..Sat), interpreted in LOCAL time
       timezoneOffsetMinutes, // required for local interpretation (JS getTimezoneOffset)
+      status = "open", // default to "open" if not specified
     } = request.data;
 
     if (typeof timezoneOffsetMinutes !== "number" || !isFinite(timezoneOffsetMinutes)) {
@@ -761,7 +763,7 @@ export const processTrainerAvailability = functions.https.onCall(
 
           if (!existingSlotDoc.exists) {
             batch.set(slotRef, {
-              status: "open",
+              status: status,
               startTime: slotStartTime,
               endTime: slotEndTime,
               clientId: null,
