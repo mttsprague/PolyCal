@@ -315,9 +315,6 @@ struct ClientCardView: View {
                                     Text(nextBooking.packageTypeName)
                                         .font(.bodyMedium)
                                         .foregroundStyle(AppTheme.textPrimary)
-                                        .onAppear {
-                                            print("🎫 Displaying packageTypeName: \(nextBooking.packageTypeName) from packageType: \(nextBooking.packageType ?? "nil")")
-                                        }
                                 }
                             }
                         }
@@ -742,9 +739,17 @@ class ClientCardViewModel: ObservableObject {
         await bookingsTask
         await documentsTask
         
-        // Set displayed lesson
+        // Set displayed lesson - match with fetched booking to get packageType
         if let selectedBooking = selectedBooking {
-            displayedLesson = selectedBooking
+            // Try to find the matching booking in upcomingBookings (which has packageType)
+            if let matchingBooking = upcomingBookings.first(where: { $0.id == selectedBooking.id }) {
+                displayedLesson = matchingBooking
+            } else if let matchingBooking = pastBookings.first(where: { $0.id == selectedBooking.id }) {
+                displayedLesson = matchingBooking
+            } else {
+                // Fallback to selected booking if no match found
+                displayedLesson = selectedBooking
+            }
         } else {
             displayedLesson = upcomingBookings.first
         }
