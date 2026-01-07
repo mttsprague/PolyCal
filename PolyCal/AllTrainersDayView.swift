@@ -90,16 +90,14 @@ struct AllTrainersDayView: View {
                                     .padding(.leading, 6)
                                     .padding(.trailing, 8)
 
-                                    // Grid rows for the selected day
                                     VStack(spacing: 0) {
                                         ForEach(scheduleViewModel.visibleHours, id: \.self) { hour in
                                             HStack(spacing: columnSpacing) {
                                                 ForEach(viewModel.trainers) { trainer in
                                                     ZStack(alignment: .topLeading) {
+                                                        // Empty cell background
                                                         RoundedRectangle(cornerRadius: 12)
                                                             .fill(Color(UIColor.systemGray5))
-                                                        RoundedRectangle(cornerRadius: 12)
-                                                            .stroke(Color(UIColor.systemGray3), lineWidth: 0.5)
 
                                                         if let slot = viewModel.slotFor(trainerId: trainer.id, atHour: hour) {
                                                             EventCell(slot: slot)
@@ -393,11 +391,6 @@ private struct EventCell: View {
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(slot.visualColor)
-        )
-        .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(slot.visualColor.opacity(0.08))
         )
     }
 }
