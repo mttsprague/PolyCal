@@ -76,7 +76,9 @@ struct ScheduleView: View {
                 .padding(.bottom, 4)
 
                 GeometryReader { geometry in
-                    let availableWidth = geometry.size.width - timeColWidth
+                    let horizontalPaddingPerCell: CGFloat = 6
+                    let totalHorizontalPadding = horizontalPaddingPerCell * 2 * 7 // 6px on each side of 7 cells
+                    let availableWidth = geometry.size.width - timeColWidth - totalHorizontalPadding
                     let calculatedDayWidth = availableWidth / 7
                     
                     ZStack(alignment: .topLeading) {
@@ -594,7 +596,6 @@ struct ScheduleView: View {
 
                 ForEach(matching) { slot in
                     EventCell(slot: slot)
-                        .padding(8)
                         .contentShape(Rectangle())
                         .onTapGesture {
                             onSlotTap(slot)
@@ -643,7 +644,7 @@ struct ScheduleView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 12)
                     .fill(slot.visualColor)
             )
         }

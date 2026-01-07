@@ -51,7 +51,9 @@ struct WeekStrip: View {
 
             // Evenly spaced 7-day row aligned with schedule grid
             GeometryReader { geometry in
-                let availableWidth = geometry.size.width - timeColWidth
+                let horizontalPaddingPerCell: CGFloat = 6
+                let totalHorizontalPadding = horizontalPaddingPerCell * 2 * 7 // 6px on each side of 7 cells
+                let availableWidth = geometry.size.width - timeColWidth - totalHorizontalPadding
                 let calculatedDayWidth = availableWidth / 7
                 
                 HStack(spacing: 0) {
@@ -66,6 +68,7 @@ struct WeekStrip: View {
                                 isSelected: Calendar.current.isDate(day, inSameDayAs: selectedDate)
                             )
                             .frame(width: calculatedDayWidth)
+                            .padding(.horizontal, horizontalPaddingPerCell)
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 withAnimation(.easeInOut) {
