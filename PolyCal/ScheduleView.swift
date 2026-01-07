@@ -199,7 +199,7 @@ struct ScheduleView: View {
                             editorContext = nil
                         }
                     },
-                    onSaveOngoing: { startDate, endDate, dailyStartHour, dailyEndHour, durationMinutes, daysOfWeek in
+                    onSaveOngoing: { startDate, endDate, dailyStartHour, dailyEndHour, durationMinutes, daysOfWeek, status in
                         Task {
                             await viewModel.openAvailability(
                                 start: startDate,
@@ -207,7 +207,8 @@ struct ScheduleView: View {
                                 dailyStartHour: dailyStartHour,
                                 dailyEndHour: dailyEndHour,
                                 slotDurationMinutes: durationMinutes,
-                                selectedDaysOfWeek: daysOfWeek
+                                selectedDaysOfWeek: daysOfWeek,
+                                status: status
                             )
                             editorContext = nil
                         }

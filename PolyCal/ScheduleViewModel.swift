@@ -317,7 +317,8 @@ final class ScheduleViewModel: ObservableObject {
         dailyStartHour: Int? = nil,
         dailyEndHour: Int? = nil,
         slotDurationMinutes: Int? = nil,
-        selectedDaysOfWeek: [Int]? = nil
+        selectedDaysOfWeek: [Int]? = nil,
+        status: TrainerScheduleSlot.Status = .open
     ) async {
         let fmt = DateFormatter()
         fmt.calendar = Calendar(identifier: .gregorian)
@@ -339,7 +340,8 @@ final class ScheduleViewModel: ObservableObject {
                 dailyStartHour: dailyStartHour,
                 dailyEndHour: dailyEndHour,
                 slotDurationMinutes: slotDurationMinutes,
-                daysOfWeek: selectedDaysOfWeek
+                daysOfWeek: selectedDaysOfWeek,
+                status: status.rawValue
             )
             print("processTrainerAvailability: \(result.message) slotsAdded=\(result.slotsAdded ?? 0)")
             await loadWeek()

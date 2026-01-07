@@ -90,7 +90,8 @@ final class FunctionsService {
         dailyStartHour: Int? = nil,
         dailyEndHour: Int? = nil,
         slotDurationMinutes: Int? = nil,
-        daysOfWeek: [Int]? = nil
+        daysOfWeek: [Int]? = nil,
+        status: String = "open"
     ) async throws -> ProcessAvailabilityResult {
         #if canImport(FirebaseFunctions)
         guard Auth.auth().currentUser != nil else { throw FunctionsServiceError.unauthenticated }
@@ -114,7 +115,8 @@ final class FunctionsService {
         }()
 
         var payload: [String: Any] = [
-            "timezoneOffsetMinutes": tzMinutes
+            "timezoneOffsetMinutes": tzMinutes,
+            "status": status
         ]
         if let trainerId { payload["trainerId"] = trainerId }
         if let startDate { payload["startDate"] = startDate }

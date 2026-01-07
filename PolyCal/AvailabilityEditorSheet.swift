@@ -13,7 +13,7 @@ struct AvailabilityEditorSheet: View {
     let isAdmin: Bool
     let editingTrainerId: String?
     let onSaveSingle: (Date, Date, Date, TrainerScheduleSlot.Status) -> Void
-    let onSaveOngoing: (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void
+    let onSaveOngoing: (Date?, Date?, Int?, Int?, Int?, [Int]?, TrainerScheduleSlot.Status) -> Void
     let onBookLesson: (String, TimeInterval, TimeInterval, String) -> Void // clientId, startTime, endTime, packageId
 
     @Environment(\.dismiss) private var dismiss
@@ -61,7 +61,7 @@ struct AvailabilityEditorSheet: View {
         isAdmin: Bool = false,
         editingTrainerId: String? = nil,
         onSaveSingle: @escaping (Date, Date, Date, TrainerScheduleSlot.Status) -> Void,
-        onSaveOngoing: @escaping (Date?, Date?, Int?, Int?, Int?, [Int]?) -> Void,
+        onSaveOngoing: @escaping (Date?, Date?, Int?, Int?, Int?, [Int]?, TrainerScheduleSlot.Status) -> Void,
         onBookLesson: @escaping (String, TimeInterval, TimeInterval, String) -> Void = { _, _, _, _ in }
     ) {
         self.defaultDay = defaultDay
@@ -389,7 +389,7 @@ struct AvailabilityEditorSheet: View {
 
             if recurringEnabled {
                 Section {
-                    Text("Recurring creates 60-minute open availability slots on selected weekdays between the start and end dates.")
+                    Text("Recurring creates 60-minute slots on selected weekdays between the start and end dates with the chosen status (Availability or Unavailability).")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -548,7 +548,7 @@ struct AvailabilityEditorSheet: View {
         
         let daysArray = selectedWeekdays.isEmpty ? nil : Array(selectedWeekdays).sorted()
 
-        onSaveOngoing(startDateToUse, endDateToUse, recurringStartHour, recurringEndHour, 60, daysArray)
+        onSaveOngoing(startDateToUse, endDateToUse, recurringStartHour, recurringEndHour, 60, daysArray, singleStatus)
         dismiss()
     }
 
