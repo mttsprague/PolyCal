@@ -566,16 +566,10 @@ struct ClientCardView: View {
     
     private func aggregatedPackageRow(_ package: AggregatedPackage) -> some View {
         HStack(spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text(package.packageDisplayName)
-                    .font(.bodyMedium)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(AppTheme.textPrimary)
-                
-                Text(package.statusText)
-                    .font(.labelSmall)
-                    .foregroundStyle(aggregatedPackageStatusColor(package))
-            }
+            Text(package.packageDisplayName)
+                .font(.bodyMedium)
+                .fontWeight(.semibold)
+                .foregroundStyle(AppTheme.textPrimary)
             
             Spacer()
             

@@ -302,10 +302,36 @@ struct TrainerWeekView: View {
     private func handleSlotTap(_ slot: TrainerScheduleSlot, defaultDay: Date, defaultHour: Int) {
         // Check if this is a class booking
         if slot.isClass, let classId = slot.classId {
-            selectedClassId = classId
-            selectedClassName = slot.clientName ?? "Group Class"
-            preloadedParticipants = viewModel.participantsByClassId[classId] ?? []
-            classParticipantsShown = true
+            // Use cached participants if available
+            if let cached = viewModel.participantsByClassId[classId] {
+                selectedClassId = classId
+                selectedClassName = slot.clientName ?? "Group Class"
+                preloadedParticipants = cached
+                classParticipantsShown = true
+                return
+            }
+            
+            // Fetch participants BEFORE showing sheet
+            Task {
+                do {
+                    let participants = try await fetchParticipants(classId: classId)
+                    await MainActor.run {
+                        viewModel.participantsByClassId[classId] = participants
+                        selectedClassId = classId
+                        selectedClassName = slot.clientName ?? "Group Class"
+                        preloadedParticipants = participants
+                        classParticipantsShown = true
+                    }
+                } catch {
+                    print("Error loading participants: \(error)")
+                    await MainActor.run {
+                        selectedClassId = classId
+                        selectedClassName = slot.clientName ?? "Group Class"
+                        preloadedParticipants = []
+                        classParticipantsShown = true
+                    }
+                }
+            }
             return
         }
         
@@ -328,7 +354,7 @@ struct TrainerWeekView: View {
                 return
             }
             
-            // Fetch data
+            // Fetch data BEFORE showing sheet
             Task {
                 let fetched = try? await FirestoreService.shared.fetchClient(by: clientId)
                 await MainActor.run {
@@ -360,6 +386,32 @@ struct TrainerWeekView: View {
                     self.clientCardContext = ClientCardContext(client: client, booking: booking)
                 }
             }
+        }
+    }
+    
+    private func fetchParticipants(classId: String) async throws -> [ClassParticipant] {
+        let db = Firestore.firestore()
+        let snapshot = try await db.collection("classes")
+            .document(classId)
+            .collection("participants")
+            .order(by: "registeredAt", descending: false)
+            .getDocuments()
+        
+        return snapshot.documents.compactMap { doc in
+            let data = doc.data()
+            guard let userId = data["userId"] as? String,
+                  let userName = data["userName"] as? String,
+                  let timestamp = data["registeredAt"] as? Timestamp else {
+                return nil
+            }
+            
+            return ClassParticipant(
+                id: doc.documentID,
+                userId: userId,
+                userName: userName,
+                registeredAt: timestamp.dateValue(),
+                packageType: data["packageType"] as? String
+            )
         }
     }
 }

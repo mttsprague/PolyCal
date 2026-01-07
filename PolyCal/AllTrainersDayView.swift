@@ -250,17 +250,35 @@ struct AllTrainersDayView: View {
     func handleSlotTap(_ slot: TrainerScheduleSlot) {
         // Check if this is a class booking
         if slot.isClass, let classId = slot.classId {
-            selectedClassId = classId
-            selectedClassName = slot.clientName ?? "Group Class"
-            
             // Use cached participants if available
             if let cached = scheduleViewModel.participantsByClassId[classId] {
+                selectedClassId = classId
+                selectedClassName = slot.clientName ?? "Group Class"
                 self.preloadedParticipants = cached
                 self.classParticipantsShown = true
-            } else {
-                // Show empty for now if not cached
-                self.preloadedParticipants = []
-                self.classParticipantsShown = true
+                return
+            }
+            
+            // Fetch participants BEFORE showing sheet
+            Task {
+                do {
+                    let participants = try await fetchParticipants(classId: classId)
+                    await MainActor.run {
+                        scheduleViewModel.participantsByClassId[classId] = participants
+                        selectedClassId = classId
+                        selectedClassName = slot.clientName ?? "Group Class"
+                        self.preloadedParticipants = participants
+                        self.classParticipantsShown = true
+                    }
+                } catch {
+                    print("Error loading participants: \(error)")
+                    await MainActor.run {
+                        selectedClassId = classId
+                        selectedClassName = slot.clientName ?? "Group Class"
+                        self.preloadedParticipants = []
+                        self.classParticipantsShown = true
+                    }
+                }
             }
             return
         }
@@ -287,35 +305,71 @@ struct AllTrainersDayView: View {
                 )
                 
                 self.clientCardContext = ClientCardContext(client: client, booking: booking)
-            } else {
-                // Show placeholder if not cached
-                let placeholderClient = Client(
-                    id: clientId,
-                    firstName: slot.clientName ?? "Booked",
-                    lastName: "",
-                    emailAddress: "",
-                    phoneNumber: "",
-                    photoURL: nil
-                )
-                
-                let trainerName = viewModel.trainers
-                    .first(where: { $0.id == slot.trainerId })?
-                    .displayName ?? "Trainer"
-                
-                let booking = ClientBooking(
-                    id: slot.id,
-                    trainerId: slot.trainerId,
-                    trainerName: trainerName,
-                    startTime: slot.startTime,
-                    endTime: slot.endTime,
-                    status: "confirmed",
-                    bookedAt: slot.bookedAt,
-                    isClassBooking: slot.isClassBooking,
-                    classId: slot.classId
-                )
-                
-                self.clientCardContext = ClientCardContext(client: placeholderClient, booking: booking)
+                return
             }
+            
+            // Fetch data BEFORE showing sheet
+            Task {
+                let fetched = try? await FirestoreService.shared.fetchClient(by: clientId)
+                await MainActor.run {
+                    let client = fetched ?? Client(
+                        id: clientId,
+                        firstName: slot.clientName ?? "Booked",
+                        lastName: "",
+                        emailAddress: "",
+                        phoneNumber: "",
+                        photoURL: nil
+                    )
+                    
+                    if let fetched = fetched {
+                        scheduleViewModel.clientsById[clientId] = fetched
+                    }
+                    
+                    let trainerName = viewModel.trainers
+                        .first(where: { $0.id == slot.trainerId })?
+                        .displayName ?? "Trainer"
+                    
+                    let booking = ClientBooking(
+                        id: slot.id,
+                        trainerId: slot.trainerId,
+                        trainerName: trainerName,
+                        startTime: slot.startTime,
+                        endTime: slot.endTime,
+                        status: "confirmed",
+                        bookedAt: slot.bookedAt,
+                        isClassBooking: slot.isClassBooking,
+                        classId: slot.classId
+                    )
+                    
+                    self.clientCardContext = ClientCardContext(client: client, booking: booking)
+                }
+            }
+        }
+    }
+    
+    private func fetchParticipants(classId: String) async throws -> [ClassParticipant] {
+        let db = Firestore.firestore()
+        let snapshot = try await db.collection("classes")
+            .document(classId)
+            .collection("participants")
+            .order(by: "registeredAt", descending: false)
+            .getDocuments()
+        
+        return snapshot.documents.compactMap { doc in
+            let data = doc.data()
+            guard let userId = data["userId"] as? String,
+                  let userName = data["userName"] as? String,
+                  let timestamp = data["registeredAt"] as? Timestamp else {
+                return nil
+            }
+            
+            return ClassParticipant(
+                id: doc.documentID,
+                userId: userId,
+                userName: userName,
+                registeredAt: timestamp.dateValue(),
+                packageType: data["packageType"] as? String
+            )
         }
     }
 
