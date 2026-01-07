@@ -19,10 +19,9 @@ struct AggregatedPackage: Identifiable {
     var packageDisplayName: String {
         switch packageType {
         case "single": return "Single Lesson"
-        case "five_pack": return "5-Pack"
-        case "ten_pack": return "10-Pack"
-        case "two_athlete": return "2 Athletes"
-        case "three_athlete": return "3 Athletes"
+        case "private": return "Private Lesson"
+        case "two_athlete", "2_athlete": return "2 Athletes"
+        case "three_athlete", "3_athlete": return "3 Athletes"
         case "class_pass": return "Class Pass"
         default: return packageType.replacingOccurrences(of: "_", with: " ").capitalized
         }
