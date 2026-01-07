@@ -63,8 +63,8 @@ struct AvailabilityEditorSheet: View {
         defaultHour: Int,
         isAdmin: Bool = false,
         editingTrainerId: String? = nil,
-        onSaveSingle: @escaping (Date, Date, Date, TrainerScheduleSlot.Status) -> Void,
-        onSaveOngoing: @escaping (Date?, Date?, Int?, Int?, Int?, [Int]?, TrainerScheduleSlot.Status) -> Void,
+        onSaveSingle: @escaping (Date, Date, Date, TrainerScheduleSlot.Status, Bool) -> Void,
+        onSaveOngoing: @escaping (Date?, Date?, Int?, Int?, Int?, [Int]?, TrainerScheduleSlot.Status, Bool) -> Void,
         onBookLesson: @escaping (String, TimeInterval, TimeInterval, String) -> Void = { _, _, _, _ in }
     ) {
         self.defaultDay = defaultDay
@@ -704,4 +704,3 @@ private struct OptionalDatePickerRow: View {
         }
     }
 }
-

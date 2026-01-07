@@ -53,6 +53,7 @@ interface RegisterForClassData {
  * callable function.
  */
 interface ProcessTrainerAvailabilityData {
+  trainerId?: string; // optional: specify trainer ID (admin only)
   startDate?: string; // YYYY-MM-DD (date-only)
   endDate?: string; // YYYY-MM-DD (date-only)
   dailyStartHour?: number; // 0...23 (LOCAL hour)
@@ -600,13 +601,19 @@ export const processTrainerAvailability = functions.https.onCall(
     }
     const callingUserId = request.auth.uid;
 
-    const trainerRef = db.collection("trainers").doc(callingUserId);
+    // Extract trainerId from request data (for admin use)
+    const requestedTrainerId = request.data.trainerId;
+
+    // Use provided trainerId or default to calling user
+    const targetTrainerId = requestedTrainerId || callingUserId;
+
+    const trainerRef = db.collection("trainers").doc(targetTrainerId);
     const trainerDoc = await trainerRef.get();
 
     if (!trainerDoc.exists) {
       throw new functions.https.HttpsError(
         "permission-denied",
-        "Only a registered trainer can process their own availability slots."
+        "Trainer not found."
       );
     }
     const trainerData = trainerDoc.data();
@@ -616,7 +623,7 @@ export const processTrainerAvailability = functions.https.onCall(
         "Unexpected missing trainer profile data."
       );
     }
-    const trainerId = callingUserId;
+    const trainerId = targetTrainerId;
 
     const {
       startDate: rawStartDate,
